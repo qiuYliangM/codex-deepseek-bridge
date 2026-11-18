@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.peerbridge/
+.env
+.env.*
+!.env.example
+*.log
+*.tgz
+*.deb
+*.tmp
+.DS_Store

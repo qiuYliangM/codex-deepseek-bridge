@@ -1,0 +1,39 @@
+{
+  "name": "peerbridge",
+  "version": "0.4.4",
+  "description": "Local Codex × DeepSeek Harness collaboration bridge with explicit project and session routing",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "bin": {
+    "peerbridge": "./bin/peerbridge.mjs",
+    "peerbridge-codex-mcp": "./bin/codex-mcp.mjs"
+  },
+  "scripts": {
+    "test": "node --test verify/operations.test.mjs",
+    "package": "node scripts/package.mjs",
+    "test:package": "node scripts/check-package.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiuYliangM/peerbridge.git"
+  },
+  "homepage": "https://github.com/qiuYliangM/peerbridge#readme",
+  "bugs": {
+    "url": "https://github.com/qiuYliangM/peerbridge/issues"
+  },
+  "files": [
+    "bin/peerbridge.mjs",
+    "bin/codex-mcp.mjs",
+    "src/standalone.js",
+    "src/codex/mcp.js",
+    "bridges/dsh/peerbridge-dsh-plugin/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ]
+}

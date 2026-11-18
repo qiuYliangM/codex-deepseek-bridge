@@ -1,0 +1,17 @@
+{
+  "name": "peerbridge-dsh-plugin",
+  "version": "0.4.4",
+  "description": "PeerBridge：显式工程与会话参数、双向消息及工程管理",
+  "type": "module",
+  "main": "src/index.js",
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "files": [
+    "src/",
+    "vendor/",
+    "LICENSE"
+  ]
+}
