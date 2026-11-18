@@ -54,6 +54,10 @@ export function createMcpHttp({ token, origin, adapter, signal, maxBodyBytes = 1
       }
       message = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     } catch { send(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Invalid JSON' } }); return }
+    // Reading an HTTP body yields to disposal and DELETE. A session captured
+    // before that await may have been closed while the request was uploading.
+    if (lifetime.signal.aborted) { send(res, 503, { error: 'bridge stopped' }); return }
+    session = sessions.get(sessionId)
     if (!message || Array.isArray(message) || message.jsonrpc !== '2.0' || typeof message.method !== 'string'
       || (message.params !== undefined && (!message.params || typeof message.params !== 'object' || Array.isArray(message.params)))
       || (message.id !== undefined && message.id !== null && !['string', 'number'].includes(typeof message.id))) {
@@ -83,10 +87,15 @@ export function createMcpHttp({ token, origin, adapter, signal, maxBodyBytes = 1
     res.on('close', cancelled)
     try {
       const requestSignal = AbortSignal.any([lifetime.signal, controller.signal])
-      const result = await dispatchMcp(message.method, message.params, { signal: requestSignal, adapter: adapter?.(requestSignal) })
+      const result = await dispatchMcp(message.method, message.params, {
+        signal: requestSignal, adapter: message.method === 'tools/call' ? adapter?.(requestSignal) : undefined,
+      })
       if (!res.destroyed) send(res, 200, { jsonrpc: '2.0', id: message.id, result })
     } catch (error) {
-      if (!res.destroyed) send(res, 200, { jsonrpc: '2.0', id: message.id, error: { code: error.code || -32603, message: error.message } })
+      if (!res.destroyed) send(res, 200, { jsonrpc: '2.0', id: message.id, error: {
+        code: Number.isInteger(error?.code) ? error.code : -32603,
+        message: error?.message || String(error),
+      } })
     } finally { res.off('close', cancelled); session.pending.delete(message.id) }
   }
   return { handler, close }

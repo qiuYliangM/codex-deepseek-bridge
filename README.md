@@ -2,7 +2,9 @@
 
 在 **DSH 侧安装一次标准插件**，为 Codex 与 DeepSeek Harness 提供双向消息、工程与会话管理。插件直接运行在 DSH 宿主中，自动注册 Codex 的本机 HTTP MCP 连接；不需要安装第二个应用、全局 Node.js、常驻 Hub 或手工复制网关 token。
 
-本分支开发版本为 **0.5.1**。主线已发布的 0.4.5 原生安装包保留原有行为。新插件使用 MIT 许可证，不包含两个客户端、账户信息或密钥。
+独立插件项目现位于 [DSH Codex Bridge](https://github.com/qiuYliangM/dsh-codex-bridge)，提供根目录标准 bundle、离线清理命令和独立发布。本分支保留兼容 CLI 与审核修复。
+
+本分支开发版本为 **0.5.2**。主线已发布的 0.4.5 原生安装包保留原有行为。新插件使用 MIT 许可证，不包含两个客户端、账户信息或密钥。
 
 需要已安装的两个客户端和可用的 Codex CLI。首次启用后需重载 Codex；DSH 未启用热重载时也需要重启。插件安装不发送模型消息。当前真实客户端实测为 Linux ARM64；其他平台通过隔离协议和生命周期测试，不代表已验证所有桌面版本。
 
@@ -68,15 +70,15 @@ Codex 的原生 MCP 调用通过每次请求的 `_meta.threadId` 自动提供来
 
 ## 安装
 
-下载或构建 `peerbridge-dsh-plugin-0.5.1.tgz`。当前 DSH Desktop 0.31.7 的启动清理会把本地 `.tgz` 文件误判为失效目录依赖；桌面版请先解压到长期保留的目录，再安装这个标准插件目录。POSIX 示例：
+下载或构建 `peerbridge-dsh-plugin-0.5.2.tgz`。当前 DSH Desktop 0.31.7 的启动清理会把本地 `.tgz` 文件误判为失效目录依赖；桌面版请先解压到长期保留的目录，再安装这个标准插件目录。POSIX 示例：
 
 ```sh
-mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.1
-tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.1
-dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.1
+mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.2
+tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.2.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.2
+dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.2
 ```
 
-也可在 DSH 插件页添加解压后含 `package.json` 的目录绝对路径。保持该目录存在，升级使用新的版本目录。DSH Web 可以直接 `dsh plugin --profile web add /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz`。不要直接安装仓库根目录的 GitHub 源码压缩包：可安装的标准插件位于 `bridges/dsh/peerbridge-dsh-plugin`，根项目仍保留兼容 CLI 开发代码。
+也可在 DSH 插件页添加解压后含 `package.json` 的目录绝对路径。保持该目录存在，升级使用新的版本目录。DSH Web 可以直接 `dsh plugin --profile web add /absolute/path/peerbridge-dsh-plugin-0.5.2.tgz`。不要直接安装仓库根目录的 GitHub 源码压缩包：可安装的标准插件位于 `bridges/dsh/peerbridge-dsh-plugin`，根项目仍保留兼容 CLI 开发代码。
 
 DSH 插件页负责启停、更新、卸载。插件启用时自动检测 Codex 并通过其 `config/read`、`config/batchWrite` 接口登记 MCP；只修改自己拥有的配置项，保留其他 MCP、用户配置和 TOML 注释。插件停用时撤销路由和工具、取消未完成调用，并清理自己创建的 MCP 接入口。升级时安装新版 tarball，按 DSH 提示重启。Codex 已加载的会话可能需要重载工具。
 
@@ -119,9 +121,9 @@ node bin/peerbridge.mjs peer dsh send '{"workspace":"返回的workspaceId","sess
 - Codex 默认列表隐藏新建空会话。桥保留自己创建的会话 ID，并通过 `thread/read` 验证和补全列表；归档以服务器列表为准。这个索引用于列出会话，不是默认发送目标。GUI 是否显示空会话由客户端决定。
 - DSH 网关仅支持本机回环地址。目录创建、回答文件共享和两个客户端须处于同一用户文件系统中。
 - 创建与改名分步执行；若创建后改名失败，错误包含已创建对象 ID，避免重复创建。
-- 问答仍依赖当前进程等待和本地回答文件；进程重启后的任务恢复、跨主机传输、自动循环对话终止策略尚未实现。避免双方同时阻塞等待对方回答。
+- 问答依赖当前进程等待和本地短期问题状态，成功/失败/取消/超时清理；进程重启后的任务恢复、跨主机传输、自动循环对话终止策略尚未实现。避免双方同时阻塞等待对方回答。
 - `peer_send` 的 DSH `requestId` 可由调用者提供以重试同一逻辑消息；Codex queue 暂无对应去重保证。回执仅表示排队。
-- `~/.peerbridge/`（或 `PEERBRIDGE_HOME`）保存配置、安装快照、已创建 Codex 会话索引、时间线和回答文件，均为本机明文文件。
+- `~/.peerbridge/`（或 `PEERBRIDGE_HOME`）保存配置、安装快照、已创建 Codex 会话索引、时间线和短期问题状态，均为本机明文文件。
 - 主分发为标准 DSH bundle。兼容 CLI 和旧版系统打包脚本仅作迁移/诊断入口，不包含旧 Hub 服务。
 
 ## 验证

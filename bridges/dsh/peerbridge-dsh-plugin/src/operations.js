@@ -117,6 +117,6 @@ export class PeerOperations {
     const label = this.peer === 'dsh' ? 'ChatGPT/Codex' : 'DeepSeek Harness'
     const receipt = await this.adapter.send(target,
       `【来自 ${label}${source ? ` · 会话 ${source}` : ''}】\n${text}`, args.requestId)
-    return { ...receipt, delivered: true, completed: false, workspaceId: target.workspaceId, sessionId: target.sessionId }
+    return { ...receipt, accepted: true, deliveryConfirmed: false, completed: false, workspaceId: target.workspaceId, sessionId: target.sessionId }
   }
 }

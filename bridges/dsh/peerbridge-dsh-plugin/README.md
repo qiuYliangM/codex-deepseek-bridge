@@ -11,9 +11,9 @@ missing directories. Extract this bundle into a permanent directory and install
 that directory through the Plugins page or CLI. POSIX example:
 
 ```sh
-mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.1
-tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.1
-dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.1
+mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.2
+tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.2.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.2
+dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.2
 ```
 
 Keep this directory; upgrades should use a new version directory. DSH Web can
@@ -97,3 +97,7 @@ Source, protocol limits, and tests:
 https://github.com/qiuYliangM/codex-deepseek-bridge/tree/feat/dsh-single-install
 
 MIT license; vendored `ws` retains its upstream license.
+
+## Offline cleanup
+
+After stopping or uninstalling the bridge, run `node scripts/cleanup.mjs` from the extracted plugin directory to inspect ownership. Use `--apply --profile-dir /absolute/path/to/profile` to remove verified stale registrations and their credential artifacts. Active owners, modified external transports, uncertain artifacts and shared history are preserved. See [cleanup details](docs/uninstall.md). The independently distributed project is [DSH Codex Bridge](https://github.com/qiuYliangM/dsh-codex-bridge).

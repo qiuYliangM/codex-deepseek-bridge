@@ -147,8 +147,10 @@ test('an inherited MCP entry is not shadowed by automatic registration', async t
 
 test('marked legacy stdio MCP migrates while preserving user enablement and tool policies', async t => {
   const directory = temporary(t)
-  const { home, state, rpc } = fakeConfig(directory, { peerbridge: { command: 'node', args: ['/old repo/bin/codex-mcp.mjs'], enabled: false, enabled_tools: ['peer_status'] } })
-  writeFileSync(join(home, 'config.toml'), '# PeerBridge: peer collaboration bridge (managed by peerbridge CLI; remove via peerbridge uninstall)\n')
+  const oldBin = join(directory, 'old repo', 'bin'); mkdirSync(oldBin, { recursive: true })
+  writeFileSync(join(oldBin, 'codex-mcp.mjs'), "#!/usr/bin/env node\n// PeerBridge Codex MCP bridge 启动器（stdio JSON-RPC）\nawait import('../src/codex/mcp.js')\n")
+  const { home, state, rpc } = fakeConfig(directory, { peerbridge: { command: 'node', args: [join(oldBin, 'codex-mcp.mjs')], enabled: false, enabled_tools: ['peer_status'] } })
+  writeFileSync(join(home, 'config.toml'), '# PeerBridge: peer collaboration bridge (managed by peerbridge CLI; remove via peerbridge uninstall)\n[mcp_servers.peerbridge]\n')
   const options = { codexHome: home, profileDir: directory, url: 'http://127.0.0.1:3080/mcp', rpc }
   const token = await registrationSecret(options)
   const registration = await configureCodex({ ...options, token })
@@ -173,7 +175,7 @@ async function httpFixture(t, options = {}) {
   const init = async () => {
     const response = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } })
     assert.equal(response.status, 200)
-    assert.equal((await response.json()).result.serverInfo.version, '0.5.1')
+    assert.equal((await response.json()).result.serverInfo.version, '0.5.2')
     return response.headers.get('mcp-session-id')
   }
   return { post, init, origin, token, transport }

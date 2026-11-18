@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 
 const begin = '# begin-peerbridge (managed by peerbridge CLI)'
@@ -22,7 +22,14 @@ export function migrateLegacyPatch(path) {
   const hasYaml = kept.some(line => line.trim() && !line.trimStart().startsWith('#'))
   const content = kept.join(original.includes('\r\n') ? '\r\n' : '\n') + (hasYaml ? '' : '\n[]\n')
   const temporary = `${path}.${randomUUID()}.tmp`
-  writeFileSync(temporary, content)
-  renameSync(temporary, path)
+  const mode = statSync(path).mode & 0o777
+  try {
+    writeFileSync(temporary, content, { mode })
+    chmodSync(temporary, mode)
+    // An external profile editor must not lose edits made while migration was
+    // preparing its replacement, even if they are outside our managed block.
+    if (readFileSync(path, 'utf8') !== original) throw new Error('DSH profile patch 已被同时修改，未覆盖配置')
+    renameSync(temporary, path)
+  } finally { try { unlinkSync(temporary) } catch (error) { if (error.code !== 'ENOENT') throw error } }
   return true
 }

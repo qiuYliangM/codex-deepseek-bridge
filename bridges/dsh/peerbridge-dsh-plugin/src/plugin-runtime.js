@@ -3,11 +3,11 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { CodexAdapter, DshAdapter } from './adapters.js'
 import { defaultCodexBin } from './codex-client.js'
-import { configureCodex, registrationSecret } from './codex-registration.js'
+import { configureCodex, leaseCodexRegistration, registrationSecret } from './codex-registration.js'
 import { migrateLegacyPatch } from './legacy-migration.js'
 import { createMcpHttp } from './mcp-http.js'
 import { readConfig } from './state.js'
-import { runTool, toolDefinitions } from './tools.js'
+import { cleanupExpiredQuestions, runTool, toolDefinitions } from './tools.js'
 
 const skippedLegacy = new Set()
 
@@ -29,6 +29,9 @@ export async function mountPlugin(ctx, config, defineTool, { register = configur
   // Existing user patches can still refer to the old ID during the first
   // migration generation. It must never register a second set of peer tools.
   if (ctx.fiber?.entry?.options?.id === 'peerbridge') { skippedLegacy.add(profile.dir); return }
+  try { cleanupExpiredQuestions() } catch (error) {
+    ctx.logger.warn?.(`过期问答记录清理失败：${error.message}`)
+  }
   const removed = migrateLegacyPatch(profile.patchPath)
   if (removed) ctx.logger.info('已移除旧 PeerBridge 安装器管理的 patch；后续由标准 DSH bundle 管理。')
   const lifetime = new AbortController()
@@ -36,14 +39,29 @@ export async function mountPlugin(ctx, config, defineTool, { register = configur
     let transport, unregister, registration
     let disarmed = false
     const tools = []
-    const dispose = async () => {
+    let cleanupPromise
+    const cleanupTasks = []
+    const dispose = () => {
+      if (cleanupPromise) return cleanupPromise
       if (!disarmed) {
         disarmed = true
         lifetime.abort(new Error('DSH bridge disabled'))
-        transport?.close(); unregister?.()
-        for (const release of tools.reverse()) release()
+        if (transport) cleanupTasks.push(() => transport.close())
+        if (unregister) cleanupTasks.push(unregister)
+        cleanupTasks.push(...tools.reverse())
+        if (registration) cleanupTasks.push(() => registration.release())
       }
-      await registration?.release()
+      cleanupPromise = (async () => {
+        const errors = []
+        for (const release of [...cleanupTasks]) {
+          try {
+            await release()
+            cleanupTasks.splice(cleanupTasks.indexOf(release), 1)
+          } catch (error) { errors.push(error) }
+        }
+        if (errors.length) throw new AggregateError(errors, 'PeerBridge cleanup failed; failed resources can be retried')
+      })().finally(() => { cleanupPromise = undefined })
+      return cleanupPromise
     }
     try {
       const origin = localOrigin(ctx.webServer)
@@ -59,9 +77,6 @@ export async function mountPlugin(ctx, config, defineTool, { register = configur
         adapter: signal => new DshAdapter({ signal, url: ctx.connection.authenticatedUrl(origin) }),
       })
       unregister = ctx.webServer.register({ kind: 'exact', path, handler: transport.handler })
-      if (config.autoConfigureCodex !== false) {
-        registration = await register({ ...options, profileDir: profile.dir, url: `${origin}${path}`, token, codexBin, signal: lifetime.signal })
-      }
       // HMR tears down the former tools after the owned profile block changes.
       // Startup-only profiles need one restart when migrating the old plugin.
       for (let i = 0; ; i++) {
@@ -84,10 +99,21 @@ export async function mountPlugin(ctx, config, defineTool, { register = configur
           },
         })))
       }
+      // Tool-name conflicts must fail before changing the user's Codex entry.
+      if (config.autoConfigureCodex !== false) {
+        registration = await register({ ...options, profileDir: profile.dir, url: `${origin}${path}`, token, codexBin, signal: lifetime.signal })
+      } else {
+        registration = await leaseCodexRegistration({ ...options, profileDir: profile.dir, url: `${origin}${path}`, token })
+      }
       ctx.logger.info(config.autoConfigureCodex !== false
         ? `Codex MCP ${serverName} 已自动配置；首次接入请重载 Codex。`
         : `本机 MCP 服务已启动（${serverName}）；自动配置已关闭。`)
       return dispose
-    } catch (error) { await dispose(); throw error }
+    } catch (error) {
+      try { await dispose() } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], `${error.message}; PeerBridge startup rollback failed`)
+      }
+      throw error
+    }
   }, 'peerbridge: MCP route, Codex registration and tools')
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2 (plugin-only branch)
+
+- Fix ownership recovery, cross-process registration locking, lifecycle rollback and concurrent MCP session disposal.
+- Add ownership-aware offline cleanup for stale registrations and scoped credential artifacts, including manual-mode leases.
+- Reject invalid/late/duplicate question answers, propagate deadlines and clean pending question files.
+- Preserve created session IDs on index failures; avoid implicit DSH session creation while sending.
+- Use accepted/unconfirmed receipts for queued messages.
+- Publish the standard bundle as the independent DSH Codex Bridge project.
+
 ## 0.5.1 (plugin-only branch)
 
 - Document and verify the persistent-directory install workaround for Desktop 0.31.7, whose startup cleanup removes local tarball dependencies.

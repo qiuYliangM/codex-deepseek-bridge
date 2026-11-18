@@ -52,6 +52,7 @@ async function pages(client, method, params = {}) {
 export class DshAdapter {
   constructor(options = {}) { this.options = options }
   client() { return new DshClient(this.options) }
+  withSignal(signal) { return new DshAdapter({ ...this.options, signal }) }
 
   async workspaces() {
     const baseline = await this.client().baseline()
@@ -110,7 +111,8 @@ export class DshAdapter {
 
   async send(target, text, requestId) {
     const client = this.client()
-    await client.call('session/create', { request: { sessionId: target.sessionId, cwd: target.cwd } })
+    // session/prompt resumes an existing cold session itself. Creating here
+    // could recreate a target deleted after validation, outside its workspace.
     const result = await client.call('session/prompt', { request: {
       requestId: requestId || `peerbridge-${randomUUID()}`, sessionId: target.sessionId,
       mode: 'queue', content: [{ type: 'text', text }],
@@ -123,6 +125,7 @@ export class DshAdapter {
 export class CodexAdapter {
   constructor(options = {}) { this.options = options }
   rpc(run) { return withCodex(this.options, run) }
+  withSignal(signal) { return new CodexAdapter({ ...this.options, signal }) }
 
   async workspaces() {
     return this.rpc(async client => {
@@ -200,7 +203,13 @@ export class CodexAdapter {
       const result = await client.call('thread/start', { cwd: workspace.path, projectId: workspace.workspaceId })
       const session = codexSession(result.thread)
       // Codex omits empty unarchived threads from thread/list; re-read these IDs from the server.
-      this.rememberSession(session.sessionId)
+      try { this.rememberSession(session.sessionId) }
+      catch (error) {
+        throw Object.assign(new Error(`Codex 会话已创建 ${session.sessionId}，但本地空会话索引保存失败: ${error.message}。请勿重复创建；该空会话暂可能不出现在列表中。`), {
+          code: 'SESSION_CREATED_INDEX_FAILED',
+          details: { created: true, completed: false, session, indexSaved: false },
+        })
+      }
       if (args.title) {
         try { await client.call('thread/name/set', { threadId: session.sessionId, name: args.title }) }
         catch (error) { throw new Error(`会话已创建 ${session.sessionId}，但命名失败: ${error.message}`) }

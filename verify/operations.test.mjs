@@ -186,8 +186,8 @@ test('shared answer IDs cannot escape the answer directory; limit zero returns z
   writeFileSync(join(directory, 'config.json'), '{"keep":true}')
   await assert.rejects(runTool('dsh', 'peer_answer', { questionId: '../config', answer: 'x' }), /格式无效/)
   assert.equal(readFileSync(join(directory, 'config.json'), 'utf8'), '{"keep":true}')
-  await runTool('dsh', 'peer_answer', { questionId: 'q-123456abcdef', answer: 'yes' })
-  assert.ok(existsSync(join(directory, 'answers/q-123456abcdef.json')))
+  await assert.rejects(runTool('dsh', 'peer_answer', { questionId: 'q-123456abcdef', answer: 'yes' }), { code: 'QUESTION_NOT_PENDING' })
+  assert.equal(existsSync(join(directory, 'answers')), false)
   assert.deepEqual(await runTool('dsh', 'peer_events', { limit: 0 }), { entries: [] })
 })
 

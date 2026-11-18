@@ -58,7 +58,7 @@ export class CodexClient {
     this.signal?.addEventListener('abort', this.abort, { once: true })
     if (this.signal?.aborted) this.abort()
     await this.call('initialize', {
-      clientInfo: { name: 'peerbridge', title: 'Codex DeepSeek Bridge', version: '0.5.1' },
+      clientInfo: { name: 'peerbridge', title: 'Codex DeepSeek Bridge', version: '0.5.2' },
       capabilities: { experimentalApi: true, requestAttestation: false },
     })
     this.child.stdin.write(`${JSON.stringify({ method: 'initialized' })}\n`)
