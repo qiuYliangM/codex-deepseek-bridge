@@ -68,13 +68,15 @@ Codex 的原生 MCP 调用通过每次请求的 `_meta.threadId` 自动提供来
 
 ## 安装
 
-下载或构建 `peerbridge-dsh-plugin-0.5.1.tgz`，然后仅在实际使用的 DSH profile 中安装：
+下载或构建 `peerbridge-dsh-plugin-0.5.1.tgz`。当前 DSH Desktop 0.31.7 的启动清理会把本地 `.tgz` 文件误判为失效目录依赖；桌面版请先解压到长期保留的目录，再安装这个标准插件目录。POSIX 示例：
 
 ```sh
-dsh plugin --profile desktop add /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz
+mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.1
+tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.1
+dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.1
 ```
 
-DSH Web 使用 `--profile web`。也可在 DSH 插件页添加该 tarball 的绝对路径。不要直接安装仓库根目录的 GitHub 源码压缩包：可安装的标准插件位于 `bridges/dsh/peerbridge-dsh-plugin`，根项目仍保留兼容 CLI 开发代码。
+也可在 DSH 插件页添加解压后含 `package.json` 的目录绝对路径。保持该目录存在，升级使用新的版本目录。DSH Web 可以直接 `dsh plugin --profile web add /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz`。不要直接安装仓库根目录的 GitHub 源码压缩包：可安装的标准插件位于 `bridges/dsh/peerbridge-dsh-plugin`，根项目仍保留兼容 CLI 开发代码。
 
 DSH 插件页负责启停、更新、卸载。插件启用时自动检测 Codex 并通过其 `config/read`、`config/batchWrite` 接口登记 MCP；只修改自己拥有的配置项，保留其他 MCP、用户配置和 TOML 注释。插件停用时撤销路由和工具、取消未完成调用，并清理自己创建的 MCP 接入口。升级时安装新版 tarball，按 DSH 提示重启。Codex 已加载的会话可能需要重载工具。
 

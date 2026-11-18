@@ -6,11 +6,18 @@ its local authenticated HTTP MCP connection with Codex. It runs inside DSH,
 uses DSH's runtime and gateway credentials, and needs no standalone application,
 global Node.js installation, daemon, or manually copied gateway token.
 
+On Desktop 0.31.7, startup cleanup mistakes local tarball dependencies for
+missing directories. Extract this bundle into a permanent directory and install
+that directory through the Plugins page or CLI. POSIX example:
+
 ```sh
-dsh plugin --profile desktop add /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz
+mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.1
+tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.1
+dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.1
 ```
 
-Use `--profile web` for DSH Web. Install the actual bundle tarball, not the root
+Keep this directory; upgrades should use a new version directory. DSH Web can
+install the tarball directly with `dsh plugin --profile web add /path/to/bundle.tgz`. Install the actual bundle tarball, not the root
 GitHub source archive (the root remains the compatibility CLI development
 project). The bundle must run in a profile providing `tools`, `webServer`,
 `connection`, `profileContext`, and `loader`; a headless/SDK profile without a

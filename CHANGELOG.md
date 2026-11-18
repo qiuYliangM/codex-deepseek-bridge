@@ -2,6 +2,7 @@
 
 ## 0.5.1 (plugin-only branch)
 
+- Document and verify the persistent-directory install workaround for Desktop 0.31.7, whose startup cleanup removes local tarball dependencies.
 - Read native Codex `_meta.threadId` on every MCP tool call to identify the issuing chat automatically, including shared HTTP connections.
 - Bind DSH calls to their executing Agent session and reject conflicting manual source IDs before sending. Preserve explicit attribution fallback for clients without host context.
 - Cover per-call isolation, invalid metadata, conflict rejection, and two real isolated Codex threads without model prompts.
