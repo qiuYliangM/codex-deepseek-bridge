@@ -3,6 +3,8 @@
 Codex DeepSeek Bridge is a local bridge for two trusted clients running as the same OS user.
 It is not a multi-user service, a sandbox, or a cross-host authentication layer.
 
+- The standard plugin exposes MCP only to loopback callers with an exact Host/Origin fence and a private bearer token. Credentials and ownership records are stored under `~/.peerbridge/registrations/`; the owned Codex MCP entry also contains its token. Those files use owner-only POSIX permissions.
+- Automatic registration writes only the named user MCP entry through Codex's version-checked configuration RPC. It refuses foreign connections and active competing owners. Host shutdown or offline package removal cannot always execute cleanup; the stopped route cannot run calls and the same profile can recover its registration.
 - DSH gateway URLs must use HTTP(S) on `127.0.0.1`, `localhost`, or `[::1]` and include a token. The gateway address file and the bridge's own `config.json` are written with owner-only permissions on POSIX systems.
 - `~/.peerbridge/` contains plaintext credentials, message snippets, answers and local session indexes. Do not commit or share this directory, chat logs, or a gateway URL containing a real token.
 - Sending requires explicit project and session identifiers. Queue acceptance does not mean a model completed the task.

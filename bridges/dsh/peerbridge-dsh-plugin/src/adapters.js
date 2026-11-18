@@ -52,6 +52,7 @@ async function pages(client, method, params = {}) {
 export class DshAdapter {
   constructor(options = {}) { this.options = options }
   client() { return new DshClient(this.options) }
+  withSignal(signal) { return new DshAdapter({ ...this.options, signal }) }
 
   async workspaces() {
     const baseline = await this.client().baseline()
@@ -110,7 +111,8 @@ export class DshAdapter {
 
   async send(target, text, requestId) {
     const client = this.client()
-    await client.call('session/create', { request: { sessionId: target.sessionId, cwd: target.cwd } })
+    // session/prompt resumes an existing cold session itself. Creating here
+    // could recreate a target deleted after validation, outside its workspace.
     const result = await client.call('session/prompt', { request: {
       requestId: requestId || `peerbridge-${randomUUID()}`, sessionId: target.sessionId,
       mode: 'queue', content: [{ type: 'text', text }],
@@ -123,11 +125,12 @@ export class DshAdapter {
 export class CodexAdapter {
   constructor(options = {}) { this.options = options }
   rpc(run) { return withCodex(this.options, run) }
+  withSignal(signal) { return new CodexAdapter({ ...this.options, signal }) }
 
   async workspaces() {
     return this.rpc(async client => {
       const items = await pages(client, 'project/list')
-      const snapshot = readDesktopProjects()
+      const snapshot = readDesktopProjects(this.options.codexHome)
       return items.map(item => codexWorkspace(item, snapshot))
     })
   }
@@ -137,8 +140,8 @@ export class CodexAdapter {
     return this.rpc(async client => {
       const existing = (await pages(client, 'project/list')).filter(item => item.roots.some(root => root.path === path))
       if (existing.length > 1) throw new Error('该目录属于多个 Codex 工程，请通过工程 ID 选择')
-      if (existing.length) return workspaceCreationReceipt(codexWorkspace(existing[0]), false)
-      const executable = desktopExecutable()
+      if (existing.length) return workspaceCreationReceipt(codexWorkspace(existing[0], readDesktopProjects(this.options.codexHome)), false)
+      const executable = desktopExecutable(this.options)
       if (executable) {
         await openDesktopProject(executable, path, this.options)
         const registration = await waitForDesktopProject(path, this.options)
@@ -150,12 +153,12 @@ export class CodexAdapter {
         name: args.title || basename(path), roots: [{ path }],
         idempotencyKey: `peerbridge-${createHash('sha256').update(path).digest('hex')}`,
       })
-      return workspaceCreationReceipt(codexWorkspace(result.project), true, args.title)
+      return workspaceCreationReceipt(codexWorkspace(result.project, readDesktopProjects(this.options.codexHome)), true, args.title)
     })
   }
 
   async renameWorkspace(projectId, name) {
-    return this.rpc(async client => codexWorkspace((await client.call('project/update', { projectId, name })).project))
+    return this.rpc(async client => codexWorkspace((await client.call('project/update', { projectId, name })).project, readDesktopProjects(this.options.codexHome)))
   }
 
   async sessions({ archived = false } = {}) {
@@ -200,7 +203,13 @@ export class CodexAdapter {
       const result = await client.call('thread/start', { cwd: workspace.path, projectId: workspace.workspaceId })
       const session = codexSession(result.thread)
       // Codex omits empty unarchived threads from thread/list; re-read these IDs from the server.
-      this.rememberSession(session.sessionId)
+      try { this.rememberSession(session.sessionId) }
+      catch (error) {
+        throw Object.assign(new Error(`Codex 会话已创建 ${session.sessionId}，但本地空会话索引保存失败: ${error.message}。请勿重复创建；该空会话暂可能不出现在列表中。`), {
+          code: 'SESSION_CREATED_INDEX_FAILED',
+          details: { created: true, completed: false, session, indexSaved: false },
+        })
+      }
       if (args.title) {
         try { await client.call('thread/name/set', { threadId: session.sessionId, name: args.title }) }
         catch (error) { throw new Error(`会话已创建 ${session.sessionId}，但命名失败: ${error.message}`) }
@@ -217,7 +226,7 @@ export class CodexAdapter {
     await this.rpc(client => client.call(archived ? 'thread/archive' : 'thread/unarchive', { threadId }))
   }
 
-  async send(target, text) { return queueToCodex(target.sessionId, text, this.options.signal) }
+  async send(target, text) { return queueToCodex(target.sessionId, text, this.options.signal, this.options) }
 }
 
 export function adapterFor(peer, options) {

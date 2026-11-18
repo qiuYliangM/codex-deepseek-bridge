@@ -1,21 +1,17 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { runTool, toolDefinitions } from './tools.js'
+import z from '@deepseek-ai/schemastery'
+import { mountPlugin } from './plugin-runtime.js'
 
 export const name = 'peerbridge-dsh-plugin'
-export const inject = ['tools']
+export const inject = ['tools', 'webServer', 'connection', 'profileContext', 'loader']
 
-export function apply(ctx) {
-  for (const tool of toolDefinitions) {
-    ctx.tools.register(defineTool({
-      ...tool,
-      output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
-      async execute(args, exec) {
-        const value = await runTool('codex', tool.name, args, {
-          sourceSession: exec.agent?.session?.id ?? exec.sessionId,
-          signal: exec.signal,
-        })
-        return JSON.parse(JSON.stringify(value))
-      },
-    }))
-  }
+export const Config = z.object({
+  autoConfigureCodex: z.boolean().default(true),
+  mcpServerName: z.string().default('peerbridge'),
+  codexBin: z.string(),
+  codexHome: z.string(),
+})
+
+export async function apply(ctx, config) {
+  await mountPlugin(ctx, config, defineTool)
 }

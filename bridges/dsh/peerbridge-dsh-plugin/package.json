@@ -1,17 +1,44 @@
 {
   "name": "peerbridge-dsh-plugin",
-  "version": "0.4.5",
-  "description": "PeerBridge：显式工程与会话参数、双向消息及工程管理",
+  "version": "0.5.2",
+  "description": "Codex DeepSeek Bridge：一次安装，自动接入 Codex MCP，双向消息与工程管理",
   "type": "module",
   "main": "src/index.js",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiuYliangM/codex-deepseek-bridge.git"
+  },
+  "homepage": "https://github.com/qiuYliangM/codex-deepseek-bridge#readme",
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "codex",
+    "mcp",
+    "cordis"
+  ],
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.2-rc.4 <0.3.0-0"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-tools": "*"
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.4 <0.3.0-0",
+    "@deepseek-ai/schemastery": "^3.19.0"
   },
   "files": [
     "src/",
     "vendor/",
-    "LICENSE"
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "scripts/cleanup.mjs",
+    "docs/uninstall.md"
   ]
 }

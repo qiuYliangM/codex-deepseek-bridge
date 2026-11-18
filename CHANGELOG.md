@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.2 (plugin-only branch)
+
+- Fix ownership recovery, cross-process registration locking, lifecycle rollback and concurrent MCP session disposal.
+- Add ownership-aware offline cleanup for stale registrations and scoped credential artifacts, including manual-mode leases.
+- Reject invalid/late/duplicate question answers, propagate deadlines and clean pending question files.
+- Preserve created session IDs on index failures; avoid implicit DSH session creation while sending.
+- Use accepted/unconfirmed receipts for queued messages.
+- Publish the standard bundle as the independent DSH Codex Bridge project.
+
+## 0.5.1 (plugin-only branch)
+
+- Document and verify the persistent-directory install workaround for Desktop 0.31.7, whose startup cleanup removes local tarball dependencies.
+- Read native Codex `_meta.threadId` on every MCP tool call to identify the issuing chat automatically, including shared HTTP connections.
+- Bind DSH calls to their executing Agent session and reject conflicting manual source IDs before sending. Preserve explicit attribution fallback for clients without host context.
+- Cover per-call isolation, invalid metadata, conflict rejection, and two real isolated Codex threads without model prompts.
+
+## 0.5.0 (plugin-only branch)
+
+- Distribute a standard DSH bundle with its own manifest and patch, visible and controllable in the official Plugins page.
+- Host authenticated HTTP MCP inside DSH and automatically register its Codex connection through the versioned configuration RPC. No separate runtime installation or manual gateway-token copy is needed.
+- Preserve unrelated configuration and comments, reject foreign connections and competing profiles, and retain user changes to an owned transport.
+- Cancel requests and release routes, tools and owned MCP registration on disposal; recover the same profile after restart and migrate the old installer's marked patch and stdio connection.
+- Keep the standalone CLI as a compatibility entry; validate the shipped bundle and actual DSH/Codex integration with isolated homes and no model prompts.
+
 ## 0.4.5
 
 - Add Linux amd64/arm64 Debian packages, a Windows x64 NSIS installer, and macOS Intel/Apple Silicon packages with a bundled, checksum-verified Node.js runtime.

@@ -1,10 +1,12 @@
 # Codex DeepSeek Bridge
 
-Codex × DeepSeek Harness 的本机协作桥。v0.4 使用显式工程和会话参数管理消息目标，无需常驻 Hub。使用 MIT 许可证，不捆绑两个客户端。
+在 **DSH 侧安装一次标准插件**，为 Codex 与 DeepSeek Harness 提供双向消息、工程与会话管理。插件直接运行在 DSH 宿主中，自动注册 Codex 的本机 HTTP MCP 连接；不需要安装第二个应用、全局 Node.js、常驻 Hub 或手工复制网关 token。
 
-命令、npm 包名和本机配置目录继续使用 `peerbridge`，兼容已有安装。
+独立插件项目现位于 [DSH Codex Bridge](https://github.com/qiuYliangM/dsh-codex-bridge)，提供根目录标准 bundle、离线清理命令和独立发布。本分支保留兼容 CLI 与审核修复。
 
-当前主要实测平台为 Linux ARM64；其他系统尚未完成桌面端兼容验证。工程删除、旧后台工程自动合并和任意桌面标题同步尚未支持。
+本分支开发版本为 **0.5.2**。主线已发布的 0.4.5 原生安装包保留原有行为。新插件使用 MIT 许可证，不包含两个客户端、账户信息或密钥。
+
+需要已安装的两个客户端和可用的 Codex CLI。首次启用后需重载 Codex；DSH 未启用热重载时也需要重启。插件安装不发送模型消息。当前真实客户端实测为 Linux ARM64；其他平台通过隔离协议和生命周期测试，不代表已验证所有桌面版本。
 
 ## 目标参数
 
@@ -62,45 +64,44 @@ Codex 本机桌面同步：检测到本机桌面版后，新目录通过 `codex:
 
 `desktopSync` 分别报告 `registered`（桌面状态中已登记）、`missing`、`identity-mismatch` 或 `unavailable`，并通过 `displayTitle`、`titleMatches` 区分后台名称与桌面名称。`liveUiVerified: false` 表示运行时仅核对持久化登记，没有读取屏幕。桌面入口使用目录名；请求不同的自定义标题会返回 `titleApplied: false`、`completed: false`，不能报告完整成功。已有的仅后台登记工程不会自动合并或重复新建，会保留原 ID 并返回 `completed: false`；未检测到桌面入口时也明确返回后台部分成功。修改后台工程名暂不保证同步桌面名称。读取桌面状态不修改客户端文件、不自动重启客户端。DeepSeek 官方桌面版的创建结果已验证进入其工作区注册表。
 
-`sourceSession` 是发送和提问的可选来源标签，不决定目标。Codex 默认从 `CODEX_THREAD_ID` / `CODEX_SESSION_ID` 获取来源，DSH 默认使用执行工具的 Agent 会话 ID。来源缺失不影响显式目标发送。
+Codex 的原生 MCP 调用通过每次请求的 `_meta.threadId` 自动提供来源会话；DSH 使用执行工具的 Agent 会话 ID。宿主提供来源时，手工 `sourceSession` 与其冲突会报 `SOURCE_SESSION_MISMATCH`，不会发送。旧 stdio 入口保留环境变量回退；缺少宿主上下文的兼容调用仍可显式提供来源标签。MCP 的连接会话 ID 不用于识别 Codex 聊天，来源缺失时也不猜测默认聊天。来源字段不决定发送目标。
+
+这只补齐自动来源识别；结构化收件箱和 `peer_reply` 尚未实现，当前消息来源仍显示在正文标签中。原生元数据是宿主提供的调用上下文，不构成跨用户身份认证。
 
 ## 安装
 
-Linux x64/ARM64 `.deb`、Windows x64 `.exe`、macOS Intel/Apple Silicon `.pkg` 安装包内置 Node.js；安装、连接客户端与升级方式见 [安装包说明](docs/installers.md)。项目提供命令行与 MCP 工具。
+下载或构建 `peerbridge-dsh-plugin-0.5.2.tgz`。当前 DSH Desktop 0.31.7 的启动清理会把本地 `.tgz` 文件误判为失效目录依赖；桌面版请先解压到长期保留的目录，再安装这个标准插件目录。POSIX 示例：
 
-需要 Node.js >= 22.19、已安装且支持 `codex queue` 和实验性项目 RPC 的 Codex CLI，以及可用的 DSH CLI/Web 网关。同一系统用户运行两个客户端；这不是跨主机服务。没有对应实验性接口的 Codex 版本会报错。
+```sh
+mkdir -p ~/.local/share/codex-deepseek-bridge/0.5.2
+tar -xzf /absolute/path/peerbridge-dsh-plugin-0.5.2.tgz --strip-components=1 -C ~/.local/share/codex-deepseek-bridge/0.5.2
+dsh plugin --profile desktop add ~/.local/share/codex-deepseek-bridge/0.5.2
+```
 
-从源码安装：
+也可在 DSH 插件页添加解压后含 `package.json` 的目录绝对路径。保持该目录存在，升级使用新的版本目录。DSH Web 可以直接 `dsh plugin --profile web add /absolute/path/peerbridge-dsh-plugin-0.5.2.tgz`。不要直接安装仓库根目录的 GitHub 源码压缩包：可安装的标准插件位于 `bridges/dsh/peerbridge-dsh-plugin`，根项目仍保留兼容 CLI 开发代码。
 
-```bash
+DSH 插件页负责启停、更新、卸载。插件启用时自动检测 Codex 并通过其 `config/read`、`config/batchWrite` 接口登记 MCP；只修改自己拥有的配置项，保留其他 MCP、用户配置和 TOML 注释。插件停用时撤销路由和工具、取消未完成调用，并清理自己创建的 MCP 接入口。升级时安装新版 tarball，按 DSH 提示重启。Codex 已加载的会话可能需要重载工具。
+
+在多个 DSH profile 安装时，为每个 profile 设置不同的 `mcpServerName`；插件拒绝覆盖已有的其他连接。可设置 `codexBin`、`codexHome`，或通过 `autoConfigureCodex: false` 关闭自动配置。当前需要提供 Web 服务的 profile，不能在缺少 Web 服务的 headless/SDK profile 中提供双向 MCP。
+
+旧安装器的标记 patch 会自动迁移；首次切换可能需要重启 DSH 卸载旧模块，并重载 Codex 结束旧 stdio 接入。宿主未运行时卸载包、强制结束进程或 Codex 配置不可访问时，无法保证执行清理；失效端点不能执行调用，可从 Codex MCP 设置删除遗留项。
+
+配置、所有权、迁移与限制详见 [插件文档](bridges/dsh/peerbridge-dsh-plugin/README.md)。0.4.5 系统安装包的说明见 [历史安装包文档](docs/installers.md)。
+
+从源码构建：
+
+```sh
 npm ci
-node bin/peerbridge.mjs install
-node bin/peerbridge.mjs status
-```
-
-安装器更新 SDK、Web 以及已存在的 `tauri`、`desktop` profile；新版官方桌面版使用 `desktop`。尊重 `DSH_HOME` 和 `CODEX_HOME`。未指定 DSH CLI 时优先使用 `~/.local/bin/dsh`，再回退到源码 CLI。更新后重启对应 DSH 宿主和 Codex MCP，加载新版工具。
-
-WebSocket 依赖 `ws` 8.23.0 及 MIT 许可证随插件提供。桥本身无需下载运行时依赖；DSH CLI/profile 尚未就绪时，其自身的安装过程仍可能联网。安装器使用按内容哈希命名的本地源码快照，避免 pnpm 的旧 `file:` 硬链接副本遗漏新增文件。
-
-```bash
-node bin/peerbridge.mjs weburl '<带token的地址>'
-node bin/peerbridge.mjs uninstall
-```
-
-默认读取 `~/.peerbridge/web-url.txt`。从 DSH 启动日志复制其本机带 token 地址并运行 `weburl` 命令；宿主重启后地址/token 可能变化，需要更新。地址文件包含登录凭据，不要提交到 GitHub。支持 HTTP(S) 回环地址，并在写入前校验 token。连接桌面版时应写入其实际地址；安装插件不会自动切换网关。
-
-也可以安装构建后的 tarball（不包含 Node.js 或客户端）：
-
-```bash
+npm test
 npm run package
 npm run test:package
-npm install --global ./dist/peerbridge-0.4.5.tgz
-peerbridge install
 ```
 
-`dist/SHA256SUMS` 包含校验值。仓库 CI 运行测试和打包；推送与 `package.json` 版本一致的 `v*` 标签后，Release 工作流会在各平台的标准 runner 上生成、安装验证全部原生安装包，再一起发布安装包、tarball 和校验文件。不会自动发布到 npm，也不配置付费大型 runner。费用以 [GitHub Actions 官方说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions) 为准。
+产物与 SHA-256 校验值位于 `dist/`。插件自带 `ws` 及其 MIT 许可证；DSH 的包管理器仍可能需要正常的依赖安装网络访问。安装的宿主代码具有当前用户权限，两个客户端自己的授权、目录信任和管理员策略仍生效。
 
 ## 命令行
+
+以下兼容 CLI 用于开发和诊断，不是标准插件安装的必需步骤。旧 CLI 的 `install` 现在仅向一个 profile 安装标准 bundle，Codex 注册由运行中的插件负责。
 
 ```bash
 node bin/peerbridge.mjs peer dsh workspaces
@@ -114,16 +115,16 @@ node bin/peerbridge.mjs peer dsh send '{"workspace":"返回的workspaceId","sess
 
 ## 实现与边界
 
-- Codex → DSH：HTTP 网关执行工程和会话操作，WebSocket `workspace/follow` 获取注册表快照，`session/prompt` 入队。
+- Codex → DSH：调用插件内的鉴权 HTTP MCP；插件使用宿主当前网关凭据执行工程和会话操作，WebSocket `workspace/follow` 获取注册表快照，`session/prompt` 入队。
 - DSH → Codex：按需运行 `codex app-server --listen stdio://`，调用 `project/*`、`thread/*`；消息使用 `codex queue`。配置 `codexSocket` 可改用已运行 daemon 的 `app-server proxy`。
 - Codex 项目管理依赖本机实验性 app-server 协议；旧版本缺少接口会返回错误。
 - Codex 默认列表隐藏新建空会话。桥保留自己创建的会话 ID，并通过 `thread/read` 验证和补全列表；归档以服务器列表为准。这个索引用于列出会话，不是默认发送目标。GUI 是否显示空会话由客户端决定。
 - DSH 网关仅支持本机回环地址。目录创建、回答文件共享和两个客户端须处于同一用户文件系统中。
 - 创建与改名分步执行；若创建后改名失败，错误包含已创建对象 ID，避免重复创建。
-- 问答仍依赖当前进程等待和本地回答文件；进程重启后的任务恢复、跨主机传输、自动循环对话终止策略尚未实现。避免双方同时阻塞等待对方回答。
+- 问答依赖当前进程等待和本地短期问题状态，成功/失败/取消/超时清理；进程重启后的任务恢复、跨主机传输、自动循环对话终止策略尚未实现。避免双方同时阻塞等待对方回答。
 - `peer_send` 的 DSH `requestId` 可由调用者提供以重试同一逻辑消息；Codex queue 暂无对应去重保证。回执仅表示排队。
-- `~/.peerbridge/`（或 `PEERBRIDGE_HOME`）保存配置、安装快照、已创建 Codex 会话索引、时间线和回答文件，均为本机明文文件。
-- 本版仅发布当前共享运行时、CLI 和 MCP；不包含旧 Hub 服务或调用真实模型的旧验收程序。
+- `~/.peerbridge/`（或 `PEERBRIDGE_HOME`）保存配置、安装快照、已创建 Codex 会话索引、时间线和短期问题状态，均为本机明文文件。
+- 主分发为标准 DSH bundle。兼容 CLI 和旧版系统打包脚本仅作迁移/诊断入口，不包含旧 Hub 服务。
 
 ## 验证
 
@@ -134,10 +135,22 @@ PEERBRIDGE_TEST_DSH_BIN=/absolute/path/to/dsh/lib/bin.js \
 npm test
 ```
 
-默认测试使用独立目录、模拟网关和假 Codex 可执行文件。设置上述变量会额外在临时 `CODEX_HOME` / `DSH_HOME` 中验证真实接口的创建、重命名、归档和恢复，不发送模型消息，不修改日常会话。
+默认测试使用独立目录、模拟网关和假 Codex 可执行文件，并验证 HTTP MCP 鉴权、取消、注册所有权、启停及迁移。设置上述变量会额外在临时 `CODEX_HOME` / `DSH_HOME` 中验证真实接口的创建、重命名、归档和恢复，不发送模型消息，不修改日常会话。
 
-可选 DSH 实测参数必须指向可由 Node 直接执行的 CLI JavaScript 入口，不是桌面版生成的 shell shim。CI 不运行可选真实客户端测试。打包后的独立安装和 12 个 MCP 工具可用 `npm run test:package` 检查，测试过程不会连接个人客户端。
+可选 DSH 实测参数必须指向可由 Node 直接执行的 CLI JavaScript 入口，不是桌面版生成的 shell shim。CI 不运行可选真实客户端测试。标准插件包的离线安装、声明及 12 个 MCP 工具可用 `npm run test:package` 检查，测试过程不会连接个人客户端。
 
 核心运行时代码在 `bridges/dsh/peerbridge-dsh-plugin/src/`，由 DSH 插件、Codex MCP 和 CLI 共用。
 
 贡献与安全边界见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)。第三方 `ws` 的许可证随源码和安装包保留。
+
+本机真实客户端的完整插件验收（隔离 DSH/Codex home，不发送模型消息）：
+
+```sh
+PEERBRIDGE_TEST_DSH_SHIM=/absolute/path/to/dsh \
+PEERBRIDGE_TEST_CODEX_BIN=/absolute/path/to/codex \
+node verify/live-dsh-plugin.mjs
+```
+
+该验收验证官方插件管理列表、Codex 原生 MCP 工具发现、网关调用、停用清理、重启恢复、重复安装和卸载。桌面生成的启动器若固定 `DSH_HOME`，脚本只在私有测试副本中移除该固定值，并在安装前核验隔离目录；不修改用户启动器。
+
+POSIX 测试环境可额外指定 `PEERBRIDGE_TEST_PNPM_BIN=/absolute/path/to/native/pnpm`，复用已安装的包管理器，避免 Corepack 在每个隔离 home 中重新下载；此选项只修改测试进程的 PATH。

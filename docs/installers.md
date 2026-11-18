@@ -1,4 +1,8 @@
-# Native installers
+# Legacy native installers (0.4.5)
+
+Version 0.5 uses a standard DSH plugin as its primary installation. These native
+installers remain compatibility tooling; they are not needed for plugin-only
+installation. See the main README and the bundle README.
 
 Codex DeepSeek Bridge is a CLI and MCP bridge. These installers include Node.js
 and the bridge's JavaScript dependencies. They do not include a separate desktop
@@ -88,8 +92,8 @@ Use a native build host for the installer type. NSIS is needed on Windows;
 ```sh
 npm ci
 npm test
-npm run package
-npm run test:package
+npm run package:legacy
+npm run test:package:legacy
 npm run package:installer -- linux-arm64
 ```
 
@@ -97,5 +101,5 @@ Other targets: `linux-x64`, `win-x64`, `darwin-x64`, `darwin-arm64`. Output goes
 `dist/`. On GitHub, run the **Native installers** workflow manually to build all
 five targets with standard hosted runners. Download its installer artifacts;
 each contains the installer, checksum, and native validation report.
-Pushing a version tag also builds and validates all targets before publishing
-them together in a GitHub Release; a failed target prevents publication.
+The 0.5 release workflow publishes the standard plugin tarball. Native installer
+builds are a separate manual compatibility workflow.

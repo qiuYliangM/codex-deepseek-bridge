@@ -15,8 +15,8 @@ export function parseGatewayUrl(value) {
 }
 
 export class DshClient {
-  constructor({ timeoutMs = 15000, signal } = {}) {
-    const url = parseGatewayUrl(readFileSync(join(dataDir(), 'web-url.txt'), 'utf8').trim())
+  constructor({ timeoutMs = 15000, signal, url: gatewayUrl } = {}) {
+    const url = parseGatewayUrl(gatewayUrl ?? readFileSync(join(dataDir(), 'web-url.txt'), 'utf8').trim())
     this.base = url.origin
     this.token = url.searchParams.get('token')
     this.signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs)
