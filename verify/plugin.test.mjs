@@ -12,7 +12,7 @@ import { migrateLegacyPatch } from '../bridges/dsh/peerbridge-dsh-plugin/src/leg
 import { localOrigin, mountPlugin } from '../bridges/dsh/peerbridge-dsh-plugin/src/plugin-runtime.js'
 
 function temporary(t, beforeCleanup) {
-  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'bridge plugin ')))
+  const directory = realpathSync.native(mkdtempSync(join(tmpdir(), 'bridge plugin ')))
   const previous = process.env.PEERBRIDGE_HOME
   process.env.PEERBRIDGE_HOME = join(directory, 'private')
   mkdirSync(process.env.PEERBRIDGE_HOME)
