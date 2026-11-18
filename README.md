@@ -1,6 +1,8 @@
-# PeerBridge
+# Codex DeepSeek Bridge
 
 Codex × DeepSeek Harness 的本机协作桥。v0.4 使用显式工程和会话参数管理消息目标，无需常驻 Hub。使用 MIT 许可证，不捆绑两个客户端。
+
+命令、npm 包名和本机配置目录继续使用 `peerbridge`，兼容已有安装。
 
 当前主要实测平台为 Linux ARM64；其他系统尚未完成桌面端兼容验证。工程删除、旧后台工程自动合并和任意桌面标题同步尚未支持。
 
@@ -76,7 +78,7 @@ node bin/peerbridge.mjs status
 
 安装器更新 SDK、Web 以及已存在的 `tauri`、`desktop` profile；新版官方桌面版使用 `desktop`。尊重 `DSH_HOME` 和 `CODEX_HOME`。未指定 DSH CLI 时优先使用 `~/.local/bin/dsh`，再回退到源码 CLI。更新后重启对应 DSH 宿主和 Codex MCP，加载新版工具。
 
-WebSocket 依赖 `ws` 8.23.0 及 MIT 许可证随插件提供。PeerBridge 本身无需下载运行时依赖；DSH CLI/profile 尚未就绪时，其自身的安装过程仍可能联网。安装器使用按内容哈希命名的本地源码快照，避免 pnpm 的旧 `file:` 硬链接副本遗漏新增文件。
+WebSocket 依赖 `ws` 8.23.0 及 MIT 许可证随插件提供。桥本身无需下载运行时依赖；DSH CLI/profile 尚未就绪时，其自身的安装过程仍可能联网。安装器使用按内容哈希命名的本地源码快照，避免 pnpm 的旧 `file:` 硬链接副本遗漏新增文件。
 
 ```bash
 node bin/peerbridge.mjs weburl '<带token的地址>'

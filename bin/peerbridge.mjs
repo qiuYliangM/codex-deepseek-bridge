@@ -38,7 +38,7 @@ switch (command) {
     break
   }
   default:
-    console.log('PeerBridge —— Codex × DeepSeek Harness 对等协作桥（无守护进程）\n')
+    console.log('Codex DeepSeek Bridge —— Codex × DeepSeek Harness 对等协作桥（无守护进程）\n')
     console.log('  peerbridge install                安装（DSH 插件 + Codex MCP + 配置）')
     console.log('  peerbridge weburl <带token地址>   写入 dsh 网关地址（宿主重启后可能需要更新）')
     console.log('  peerbridge status                 查看状态')

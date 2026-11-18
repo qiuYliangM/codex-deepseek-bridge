@@ -19,11 +19,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/qiuYliangM/peerbridge.git"
+    "url": "git+https://github.com/qiuYliangM/codex-deepseek-bridge.git"
   },
-  "homepage": "https://github.com/qiuYliangM/peerbridge#readme",
+  "homepage": "https://github.com/qiuYliangM/codex-deepseek-bridge#readme",
   "bugs": {
-    "url": "https://github.com/qiuYliangM/peerbridge/issues"
+    "url": "https://github.com/qiuYliangM/codex-deepseek-bridge/issues"
   },
   "files": [
     "bin/peerbridge.mjs",
