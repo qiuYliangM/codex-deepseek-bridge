@@ -5,7 +5,8 @@ const standalone = await import('../src/standalone.js')
 
 switch (command) {
   case 'install':
-    standalone.cmdInstall(); break
+    if (rest.length && (rest[0] !== '--profile' || !rest[1] || rest.length !== 2)) throw new Error('用法：peerbridge install [--profile desktop]')
+    standalone.cmdInstall(rest[1]); break
   case 'uninstall':
     standalone.cmdUninstall(rest.includes('--purge')); break
   case 'bind':
@@ -39,7 +40,7 @@ switch (command) {
   }
   default:
     console.log('Codex DeepSeek Bridge —— Codex × DeepSeek Harness 对等协作桥（无守护进程）\n')
-    console.log('  peerbridge install                安装（DSH 插件 + Codex MCP + 配置）')
+    console.log('  peerbridge install [--profile 名称]  安装标准 DSH bundle（插件自动配置 Codex）')
     console.log('  peerbridge weburl <带token地址>   写入 dsh 网关地址（宿主重启后可能需要更新）')
     console.log('  peerbridge status                 查看状态')
     console.log('  peerbridge peer <dsh|codex> <操作> [JSON参数]   显式指定工程与会话')

@@ -43,21 +43,19 @@ try {
   assert.equal(messages.find(message => message.id === 1).result.serverInfo.version, build.version)
   assert.equal(messages.find(message => message.id === 2).result.tools.length, 12)
   const dsh = join(temporary, 'mock dsh.mjs')
-  writeFileSync(dsh, `import{mkdirSync,writeFileSync}from'node:fs';import{join}from'node:path';const a=process.argv.slice(2);const p=join(process.env.DSH_HOME,'profiles',a[a.indexOf('--profile')+1]);mkdirSync(p,{recursive:true});writeFileSync(join(p,'package.json'),JSON.stringify({dependencies:a.includes('add')?{'peerbridge-dsh-plugin':a.at(-1)}:{}}));`)
+  writeFileSync(dsh, `import{mkdirSync,writeFileSync}from'node:fs';import{join}from'node:path';const a=process.argv.slice(2);const p=join(process.env.DSH_HOME,'profiles',a[a.indexOf('--profile')+1]);mkdirSync(p,{recursive:true});writeFileSync(join(p,'package.json'),JSON.stringify({dependencies:a.includes('add')?{'peerbridge-dsh-plugin':a.at(-1)}:{},dsh:{profile:{bundles:a.includes('add')?['peerbridge-dsh-plugin']:[]}}}));`)
   writeFileSync(join(bridge, 'config.json'), JSON.stringify({ dshBin: dsh, codexBin: 'test-not-invoked' }))
   run(node, [entry, 'install'])
-  const configuration = readFileSync(join(env.CODEX_HOME, 'config.toml'), 'utf8')
-  assert.ok(configuration.includes(`command = ${JSON.stringify(node)}`))
-  assert.ok(configuration.includes(JSON.stringify(mcp)))
-  for (const profile of ['sdk', 'web']) {
+  assert.equal(existsSync(join(env.CODEX_HOME, 'config.toml')), false, 'Codex registration belongs to the running DSH plugin')
+  for (const profile of ['web']) {
     const manifest = JSON.parse(readFileSync(join(env.DSH_HOME, 'profiles', profile, 'package.json')))
     const snapshot = manifest.dependencies['peerbridge-dsh-plugin'].slice(5)
     assert.ok(existsSync(join(snapshot, 'src/cli-command.js')))
     assert.ok(existsSync(join(snapshot, 'vendor/ws/LICENSE')))
   }
   run(node, [entry, 'uninstall'])
-  assert.doesNotMatch(readFileSync(join(env.CODEX_HOME, 'config.toml'), 'utf8'), /mcp_servers\.peerbridge/)
-  const report = { target, version: build.version, nodeVersion: build.nodeVersion, sourceCommit: build.sourceCommit, installed: true, bundledRuntime: true, systemNodeRequired: false, cli: 'passed', mcpTools: 12, isolatedRegistration: 'passed', realClientModelTested: false, signed: false }
+  assert.equal(existsSync(join(env.CODEX_HOME, 'config.toml')), false)
+  const report = { target, version: build.version, nodeVersion: build.nodeVersion, sourceCommit: build.sourceCommit, installed: true, bundledRuntime: true, systemNodeRequired: false, cli: 'passed', mcpTools: 12, isolatedRegistration: 'bundle-installation-only', realClientModelTested: false, signed: false }
   mkdirSync(join(root, 'dist'), { recursive: true })
   writeFileSync(join(root, 'dist', `native-${target}.json`), JSON.stringify(report, null, 2) + '\n')
   console.log(`Native installed ${target}: bundled Node, CLI, 12 MCP tools and isolated registration passed.`)

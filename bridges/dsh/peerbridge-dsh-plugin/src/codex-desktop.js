@@ -5,13 +5,15 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { readConfig } from './state.js'
 import { cliCommand } from './cli-command.js'
+import { defaultCodexBin } from './codex-client.js'
 
-export function desktopExecutable() {
+export function desktopExecutable(options = {}) {
   const config = readConfig()
   if (config.codexDesktopBin === false) return null
   if (typeof config.codexDesktopBin === 'string') return config.codexDesktopBin
   if (process.platform !== 'linux' || config.codexSocket
-    || config.codexBin !== '/usr/lib/chatgpt/resources/codex'
+    || (options.codexBin || config.codexBin || defaultCodexBin()) !== '/usr/lib/chatgpt/resources/codex'
+    || (options.codexHome && resolve(options.codexHome) !== join(homedir(), '.codex'))
     || (process.env.CODEX_HOME && resolve(process.env.CODEX_HOME) !== join(homedir(), '.codex'))) return null
   return existsSync('/usr/bin/chatgpt') && readDesktopProjects().available ? '/usr/bin/chatgpt' : null
 }
@@ -31,11 +33,11 @@ export async function openDesktopProject(executable, path, { signal } = {}) {
   })
 }
 
-export async function waitForDesktopProject(path, { signal, timeoutMs = 30000 } = {}) {
+export async function waitForDesktopProject(path, { signal, timeoutMs = 30000, codexHome } = {}) {
   const deadline = Date.now() + timeoutMs
   do {
     signal?.throwIfAborted()
-    const snapshot = readDesktopProjects()
+    const snapshot = readDesktopProjects(codexHome)
     const matching = snapshot.available ? snapshot.projects.filter(item => Array.isArray(item?.rootPaths) && item.rootPaths.length === 1 && item.rootPaths[0] === path) : []
     if (matching.length > 1) throw new Error('桌面目录对应多个工程，请明确指定工程 ID')
     if (matching.length === 1 && snapshot.ids[matching[0].id]) {

@@ -1,7 +1,7 @@
 /**
  * PeerBridge 独立 CLI（无 Hub 架构）：一次性安装/卸载，无守护进程。
  *
- *   peerbridge install                 安装：DSH 插件入 profile + Codex MCP 注册 + 初始化配置
+ *   peerbridge install                 向一个 profile 安装标准 DSH bundle
  *   peerbridge uninstall               卸载：两端注册摘除（配置目录保留，可加 --purge 清理）
  *   peerbridge weburl <带token地址>     写入 dsh Web 网关地址（宿主重启后可能需要更新）
  *   peerbridge status                  查看安装与绑定状态
@@ -18,16 +18,14 @@ import { fileURLToPath } from 'node:url'
 import { dataDir, readConfig as loadConfig } from '../bridges/dsh/peerbridge-dsh-plugin/src/state.js'
 import { parseGatewayUrl } from '../bridges/dsh/peerbridge-dsh-plugin/src/dsh-client.js'
 import { cliCommand, cliEnvironment } from '../bridges/dsh/peerbridge-dsh-plugin/src/cli-command.js'
+import { migrateLegacyPatch } from '../bridges/dsh/peerbridge-dsh-plugin/src/legacy-migration.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = dataDir()
 const CONFIG_PATH = join(DATA_DIR, 'config.json')
 const PLUGIN_PATH = join(ROOT, 'bridges', 'dsh', 'peerbridge-dsh-plugin')
-const MCP_ENTRY = join(ROOT, 'bin', 'codex-mcp.mjs')
 
 const CODEX_MARKER = '# PeerBridge: peer collaboration bridge (managed by peerbridge CLI; remove via peerbridge uninstall)'
-const PATCH_BEGIN = '# begin-peerbridge (managed by peerbridge CLI)'
-const PATCH_END = '# end-peerbridge'
 
 function readConfig()             {
   return loadConfig()
@@ -90,87 +88,9 @@ function codexConfigPath()         {
   return join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'config.toml')
 }
 
-function escapeRegExp(value        )         {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/** profile 用户 patch 层：写/删插件激活行（标记块包裹，保证文件始终为有效 YAML）。 */
-function upsertPatchRow(profile        , add         )       {
-  if (!add && !existsSync(dshProfileDir(profile))) return
-  mkdirSync(dshProfileDir(profile), { recursive: true })
-  const patchPath = join(dshProfileDir(profile), 'cordis.patch.yml')
-  const block = [
-    PATCH_BEGIN,
-    '- insert:',
-    '    - id: peerbridge',
-    "      name: 'peerbridge-dsh-plugin'",
-    PATCH_END,
-  ].join('\n')
-  const current = existsSync(patchPath) ? readFileSync(patchPath, 'utf8') : ''
-  let without = current
-  if (current.includes(PATCH_BEGIN) && current.includes(PATCH_END)) {
-    without = current.replace(new RegExp(`${escapeRegExp(PATCH_BEGIN)}[\\s\\S]*?${escapeRegExp(PATCH_END)}\\n?`, 'g'), '')
-  }
-  if (!add) {
-    const hasNode = without.split('\n').some(line => { const t = line.trim(); return t.length > 0 && !t.startsWith('#') })
-    writeFileSync(patchPath, hasNode ? `${without.trimEnd()}\n` : `${without.split('\n').filter(l => l.trim().startsWith('#')).join('\n')}\n[]\n`)
-    return
-  }
-  const cleaned = without.replace(/(^|\n)\s*\[\]\s*(?=\n|$)/g, '\n').trim()
-  writeFileSync(patchPath, cleaned.length === 0 ? `${block}\n` : `${cleaned}\n\n${block}\n`)
-}
-
 function codexMcpInstalled()          {
   const configPath = codexConfigPath()
   return existsSync(configPath) && readFileSync(configPath, 'utf8').includes('[mcp_servers.peerbridge]')
-}
-
-function installCodexMcp(codexBin        )       {
-  const configPath = codexConfigPath()
-  mkdirSync(dirname(configPath), { recursive: true })
-  let content = existsSync(configPath) ? readFileSync(configPath, 'utf8') : ''
-  const lines = content.split('\n')
-  const header = lines.findIndex(line => /^\s*\[mcp_servers\.peerbridge\]\s*(?:#.*)?$/.test(line))
-  if (header !== -1) {
-    let end = header + 1
-    while (end < lines.length && !lines[end] .trimStart().startsWith('[')) end++
-    const kept           = []
-    for (let i = header + 1; i < end; i++) {
-      const line = lines[i]
-      if (/^\s*command\s*=/.test(line)) continue
-      if (/^\s*args\s*=/.test(line)) {
-        let depth = 0
-        let quote = ''
-        let escaped = false
-        let opened = false
-        for (; i < end; i++) {
-          const value = lines[i]
-          for (const char of value) {
-            if (quote) {
-              if (escaped) escaped = false
-              else if (char === '\\' && quote === '"') escaped = true
-              else if (char === quote) quote = ''
-            } else if (char === '#') break
-            else if (char === '"' || char === "'") quote = char
-            else if (char === '[') { opened = true; depth++ }
-            else if (char === ']') depth--
-          }
-          if (!opened || depth === 0) break
-        }
-        if (depth !== 0) throw new Error('PeerBridge MCP args 数组未闭合，未修改 Codex 配置')
-        continue
-      }
-      kept.push(line)
-    }
-    lines.splice(header + 1, end - header - 1,
-      `command = ${JSON.stringify(process.execPath)}`, `args = [${JSON.stringify(MCP_ENTRY)}]`, ...kept)
-    writeFileSync(configPath, lines.join('\n'), 'utf8')
-    return
-  }
-  const block = ['', CODEX_MARKER, '[mcp_servers.peerbridge]', `command = ${JSON.stringify(process.execPath)}`, `args = [${JSON.stringify(MCP_ENTRY)}]`, ''].join('\n')
-  content = content.trimEnd().length === 0 ? block.trimStart() : `${content.trimEnd()}\n${block}`
-  writeFileSync(configPath, content, 'utf8')
-  void codexBin
 }
 
 function removeCodexMcp()       {
@@ -193,27 +113,26 @@ function pluginInstalled(profile        )          {
   try {
     const deps = JSON.parse(readFileSync(manifest, 'utf8'))
     if (deps.dependencies?.['peerbridge-dsh-plugin'] === undefined) return false
+    if (deps.dsh?.profile?.bundles?.includes('peerbridge-dsh-plugin')) return true
   } catch { return false }
   const patch = join(dshProfileDir(profile), 'cordis.patch.yml')
   return existsSync(patch) && readFileSync(patch, 'utf8').includes('peerbridge-dsh-plugin')
 }
 
-export function cmdInstall()       {
+export function cmdInstall(requestedProfile)       {
   const config = readConfig()
   config.codexBin ??= guessCodexBin()
   config.dshBin ??= guessDshBin()
   writeConfig(config)
   // Unique immutable paths make pnpm refresh new files even after a previous file: install used hardlinks.
   const snapshot = pluginSnapshot()
-  const installedProfiles = profiles()
-  for (const profile of installedProfiles) {
-    runDsh(config.dshBin , ['plugin', '--profile', profile, 'add', `file:${snapshot}`])
-    upsertPatchRow(profile, true)
-  }
-  installCodexMcp(config.codexBin )
+  const profile = requestedProfile || (existsSync(dshProfileDir('desktop')) ? 'desktop' : 'web')
+  if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(profile)) throw new Error('profile 名称无效')
+  migrateLegacyPatch(join(dshProfileDir(profile), 'cordis.patch.yml'))
+  runDsh(config.dshBin , ['plugin', '--profile', profile, 'add', `file:${snapshot}`])
   console.log('已安装：')
-  console.log(`  · DSH 插件 → profile ${installedProfiles.join(' / ')}（宿主重启后加载新版工具）`)
-  console.log(`  · Codex MCP → ~/.codex/config.toml（Codex 下次启动生效）`)
+  console.log(`  · 标准 DSH bundle → profile ${profile}（需要时重启 DSH）`)
+  console.log('  · Codex MCP 由该插件启用时自动注册；无需再运行独立安装器')
   console.log(`  · 配置 → ${CONFIG_PATH}`)
   console.log('发送和提问时必须显式传入 workspace 与 session；可用 peer_workspaces / peer_sessions 查询目标。')
 }
@@ -221,11 +140,15 @@ export function cmdInstall()       {
 export function cmdUninstall(purge         )       {
   const config = readConfig()
   for (const profile of profiles()) {
-    upsertPatchRow(profile, false)
+    migrateLegacyPatch(join(dshProfileDir(profile), 'cordis.patch.yml'))
     try { runDsh(config.dshBin ?? 'dsh', ['plugin', '--profile', profile, 'remove', 'peerbridge-dsh-plugin']) } catch { /* 依赖不存在时忽略 */ }
   }
-  removeCodexMcp()
-  console.log('已卸载：两端注册已摘除（patch/codex 配置无残留）。')
+  const legacyConfig = codexConfigPath()
+  if (existsSync(legacyConfig)) {
+    const content = readFileSync(legacyConfig, 'utf8')
+    if (content.includes(CODEX_MARKER) && /args\s*=\s*\[[^\]]*codex-mcp\.mjs/.test(content)) removeCodexMcp()
+  }
+  console.log('已请求移除 DSH bundle；宿主运行时会清理其 Codex MCP。离线卸载后请检查 Codex 中是否保留失效连接。')
   if (purge) {
     if (existsSync(DATA_DIR)) {
       renameSync(DATA_DIR, `${DATA_DIR}.purged-${Date.now().toString(36)}`)

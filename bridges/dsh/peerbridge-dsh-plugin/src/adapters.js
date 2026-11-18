@@ -127,7 +127,7 @@ export class CodexAdapter {
   async workspaces() {
     return this.rpc(async client => {
       const items = await pages(client, 'project/list')
-      const snapshot = readDesktopProjects()
+      const snapshot = readDesktopProjects(this.options.codexHome)
       return items.map(item => codexWorkspace(item, snapshot))
     })
   }
@@ -137,8 +137,8 @@ export class CodexAdapter {
     return this.rpc(async client => {
       const existing = (await pages(client, 'project/list')).filter(item => item.roots.some(root => root.path === path))
       if (existing.length > 1) throw new Error('该目录属于多个 Codex 工程，请通过工程 ID 选择')
-      if (existing.length) return workspaceCreationReceipt(codexWorkspace(existing[0]), false)
-      const executable = desktopExecutable()
+      if (existing.length) return workspaceCreationReceipt(codexWorkspace(existing[0], readDesktopProjects(this.options.codexHome)), false)
+      const executable = desktopExecutable(this.options)
       if (executable) {
         await openDesktopProject(executable, path, this.options)
         const registration = await waitForDesktopProject(path, this.options)
@@ -150,12 +150,12 @@ export class CodexAdapter {
         name: args.title || basename(path), roots: [{ path }],
         idempotencyKey: `peerbridge-${createHash('sha256').update(path).digest('hex')}`,
       })
-      return workspaceCreationReceipt(codexWorkspace(result.project), true, args.title)
+      return workspaceCreationReceipt(codexWorkspace(result.project, readDesktopProjects(this.options.codexHome)), true, args.title)
     })
   }
 
   async renameWorkspace(projectId, name) {
-    return this.rpc(async client => codexWorkspace((await client.call('project/update', { projectId, name })).project))
+    return this.rpc(async client => codexWorkspace((await client.call('project/update', { projectId, name })).project, readDesktopProjects(this.options.codexHome)))
   }
 
   async sessions({ archived = false } = {}) {
@@ -217,7 +217,7 @@ export class CodexAdapter {
     await this.rpc(client => client.call(archived ? 'thread/archive' : 'thread/unarchive', { threadId }))
   }
 
-  async send(target, text) { return queueToCodex(target.sessionId, text, this.options.signal) }
+  async send(target, text) { return queueToCodex(target.sessionId, text, this.options.signal, this.options) }
 }
 
 export function adapterFor(peer, options) {

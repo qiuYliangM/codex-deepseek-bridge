@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chmodSync, cpSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, realpathSync, statSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, realpathSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn, execFile } from 'node:child_process'
@@ -221,44 +221,29 @@ test('Codex queue receipts support both session and thread output formats', asyn
   }
 })
 
-test('installer honors DSH_HOME, includes existing tauri profile, and removes nested MCP tables', async t => {
+test('compatibility installer adds one standard bundle to the requested profile without writing Codex config', async t => {
   const directory = sandbox(t)
-  const home = join(directory, 'home')
   const dshHome = join(directory, 'custom-dsh')
   const codexHome = join(directory, 'custom-codex')
-  mkdirSync(join(dshHome, 'profiles', 'tauri'), { recursive: true })
   mkdirSync(join(dshHome, 'profiles', 'desktop'), { recursive: true })
-  mkdirSync(codexHome, { recursive: true })
-  mkdirSync(home)
+  mkdirSync(codexHome)
   const fakeDsh = join(directory, 'dsh.mjs')
-  writeFileSync(fakeDsh, `import{mkdirSync,writeFileSync}from'node:fs';import{join}from'node:path';const a=process.argv.slice(2);const p=join(process.env.DSH_HOME,'profiles',a[a.indexOf('--profile')+1]);mkdirSync(p,{recursive:true});writeFileSync(join(p,'package.json'),JSON.stringify({dependencies:a.includes('add')?{'peerbridge-dsh-plugin':a.at(-1)}:{}}));`)
+  writeFileSync(fakeDsh, `import{mkdirSync,writeFileSync}from'node:fs';import{join}from'node:path';const a=process.argv.slice(2);const p=join(process.env.DSH_HOME,'profiles',a[a.indexOf('--profile')+1]);mkdirSync(p,{recursive:true});writeFileSync(join(p,'package.json'),JSON.stringify({dependencies:{'peerbridge-dsh-plugin':a.at(-1)},dsh:{profile:{bundles:['peerbridge-dsh-plugin']}}}));`)
   writeFileSync(join(directory, 'config.json'), JSON.stringify({ dshBin: fakeDsh, codexBin: 'unused', codexThread: 'keep-binding' }))
-  const env = { ...process.env, HOME: home, USERPROFILE: home, DSH_HOME: dshHome, CODEX_HOME: codexHome, PEERBRIDGE_HOME: directory }
+  const env = { ...process.env, DSH_HOME: dshHome, CODEX_HOME: codexHome, PEERBRIDGE_HOME: directory }
   await executeFile(process.execPath, ['bin/peerbridge.mjs', 'install'], { cwd: root, env })
-  for (const profile of ['sdk', 'web', 'tauri', 'desktop']) assert.match(readFileSync(join(dshHome, 'profiles', profile, 'cordis.patch.yml'), 'utf8'), /peerbridge-dsh-plugin/)
-  const dependency = JSON.parse(readFileSync(join(dshHome, 'profiles/web/package.json'))).dependencies['peerbridge-dsh-plugin']
-  const snapshot = dependency.slice('file:'.length)
-  assert.ok(snapshot.startsWith(join(directory, 'packages')))
-  assert.ok(existsSync(join(snapshot, 'src/adapters.js')))
+  assert.equal(existsSync(join(codexHome, 'config.toml')), false)
+  assert.equal(existsSync(join(dshHome, 'profiles', 'sdk')), false)
+  assert.equal(existsSync(join(dshHome, 'profiles', 'web')), false)
+  const manifest = JSON.parse(readFileSync(join(dshHome, 'profiles/desktop/package.json')))
+  const snapshot = manifest.dependencies['peerbridge-dsh-plugin'].slice('file:'.length)
+  assert.ok(existsSync(join(snapshot, 'cordis.patch.yml')))
+  assert.ok(existsSync(join(snapshot, 'src/plugin-runtime.js')))
   assert.ok(existsSync(join(snapshot, 'vendor/ws/LICENSE')))
-  assert.ok(!existsSync(join(home, '.dsh')))
-  const path = join(codexHome, 'config.toml')
-  writeFileSync(path, `${readFileSync(path, 'utf8').replace(/^args = .*$/m, 'args = [\n  "old entry", # closing ] in a comment\n]')}\nenabled = false\n[mcp_servers.peerbridge.env]\nKEEP = "remove"\n\n[mcp_servers.other]\ncommand = "keep"\n`)
-  const relocated = join(directory, 'checkout with spaces')
-  cpSync(root, relocated, { recursive: true, filter: path => !/(^|[\\/])(node_modules|\.git|dist|\.build|\.cache)([\\/]|$)/.test(path) })
-  await executeFile(process.execPath, [join(relocated, 'bin/peerbridge.mjs'), 'install'], { cwd: relocated, env })
-  const updated = readFileSync(path, 'utf8')
-  assert.ok(updated.includes(JSON.stringify(join(relocated, 'bin/codex-mcp.mjs'))))
-  assert.doesNotMatch(updated, /%20|old entry/)
-  assert.match(updated, /enabled = false/)
-  assert.match(updated, /KEEP = "remove"/)
-  assert.match(updated, /command = "keep"/)
-  if (process.platform !== 'win32') assert.equal(statSync(join(directory, 'config.json')).mode & 0o777, 0o600)
-  await executeFile(process.execPath, ['bin/peerbridge.mjs', 'uninstall'], { cwd: root, env })
-  const result = readFileSync(path, 'utf8')
-  assert.doesNotMatch(result, /mcp_servers\.peerbridge/)
-  assert.match(result, /mcp_servers\.other/)
+  assert.deepEqual(manifest.dsh.profile.bundles, ['peerbridge-dsh-plugin'])
   assert.equal(JSON.parse(readFileSync(join(directory, 'config.json'))).codexThread, 'keep-binding')
+  await executeFile(process.execPath, ['bin/peerbridge.mjs', 'install', '--profile', 'custom'], { cwd: root, env })
+  assert.ok(existsSync(join(dshHome, 'profiles/custom/package.json')))
 })
 
 test('gateway credentials are private and invalid URLs do not replace the saved address', async t => {
