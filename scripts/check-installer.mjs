@@ -31,7 +31,7 @@ try {
   assert.equal(run(node, ['--version']).trim(), `v${build.nodeVersion}`)
   assert.match(run(node, [entry, '--help']), /Codex DeepSeek Bridge/)
   if (platform === 'win') {
-    assert.match(run(process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', ['/d', '/s', '/c', `""${join(base, 'peerbridge.cmd')}" --help"`]), /peerbridge install/)
+    assert.match(run(process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', ['/d', '/c', 'peerbridge.cmd', '--help'], { cwd: base }), /peerbridge install/)
   } else {
     assert.match(run(platform === 'linux' ? '/usr/bin/peerbridge' : '/usr/local/bin/peerbridge', ['--help']), /peerbridge install/)
   }
