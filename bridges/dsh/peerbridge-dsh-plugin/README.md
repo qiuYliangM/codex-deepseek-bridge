@@ -7,7 +7,7 @@ uses DSH's runtime and gateway credentials, and needs no standalone application,
 global Node.js installation, daemon, or manually copied gateway token.
 
 ```sh
-dsh plugin --profile desktop add /absolute/path/peerbridge-dsh-plugin-0.5.0.tgz
+dsh plugin --profile desktop add /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz
 ```
 
 Use `--profile web` for DSH Web. Install the actual bundle tarball, not the root
@@ -50,6 +50,14 @@ All send/ask calls require explicit `workspace` and `session`; missing or
 mismatched targets fail without choosing or creating replacements. Project and
 session management tools preserve the existing bridge's semantics and desktop
 synchronization limits.
+
+Codex supplies the source chat automatically in each native MCP call through
+`_meta.threadId`; DSH uses the executing Agent session. A conflicting manual
+`sourceSession` is rejected before delivery. Source context is never inferred
+from a shared MCP session or a previous request. Older/custom clients without
+this metadata retain the explicit attribution fallback. This metadata is host
+context, not cross-user identity authentication. Structured inbox/reply routing
+is not yet implemented; source labels are still rendered in message text.
 
 ## Ownership and migration
 

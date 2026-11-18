@@ -1,6 +1,6 @@
 import { runTool, toolDefinitions } from './tools.js'
 
-export const VERSION = '0.5.0'
+export const VERSION = '0.5.1'
 const versions = new Set(['2025-03-26', '2025-06-18', '2025-11-25'])
 
 export function toolSchema(parameters) {
@@ -10,6 +10,18 @@ export function toolSchema(parameters) {
     required: Object.entries(parameters).filter(([, value]) => value.required).map(([key]) => key),
     additionalProperties: false,
   }
+}
+
+function requestSourceSession(params, fallback) {
+  const meta = params._meta
+  if (meta === undefined) return { sourceSession: fallback }
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) throw Object.assign(new Error('MCP _meta 必须是对象'), { code: 'INVALID_SOURCE_CONTEXT' })
+  if (meta.threadId === undefined) return { sourceSession: fallback }
+  if (typeof meta.threadId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(meta.threadId)) {
+    throw Object.assign(new Error('MCP 来源 threadId 格式无效'), { code: 'INVALID_SOURCE_CONTEXT' })
+  }
+  // This is per-call host context, never the shared HTTP MCP session ID.
+  return { sourceSession: meta.threadId, sourceSessionLocked: true }
 }
 
 export async function dispatchMcp(method, params = {}, { signal, sourceSession, adapter } = {}) {
@@ -26,7 +38,7 @@ export async function dispatchMcp(method, params = {}, { signal, sourceSession, 
     case 'tools/call': {
       try {
         if (typeof params.name !== 'string') throw new Error('工具名必须是字符串')
-        const result = await runTool('dsh', params.name, params.arguments ?? {}, { sourceSession, signal, adapter })
+        const result = await runTool('dsh', params.name, params.arguments ?? {}, { ...requestSourceSession(params, sourceSession), signal, adapter })
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], isError: false }
       } catch (error) {
         return { content: [{ type: 'text', text: JSON.stringify({ error: {

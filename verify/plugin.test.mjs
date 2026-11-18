@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createMcpHttp } from '../bridges/dsh/peerbridge-dsh-plugin/src/mcp-http.js'
+import { withCodex } from '../bridges/dsh/peerbridge-dsh-plugin/src/codex-client.js'
 import { configureCodex, registrationLocation, registrationSecret } from '../bridges/dsh/peerbridge-dsh-plugin/src/codex-registration.js'
 import { migrateLegacyPatch } from '../bridges/dsh/peerbridge-dsh-plugin/src/legacy-migration.js'
 import { localOrigin, mountPlugin } from '../bridges/dsh/peerbridge-dsh-plugin/src/plugin-runtime.js'
@@ -172,11 +173,37 @@ async function httpFixture(t, options = {}) {
   const init = async () => {
     const response = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } })
     assert.equal(response.status, 200)
-    assert.equal((await response.json()).result.serverInfo.version, '0.5.0')
+    assert.equal((await response.json()).result.serverInfo.version, '0.5.1')
     return response.headers.get('mcp-session-id')
   }
-  return { post, init, origin, transport }
+  return { post, init, origin, token, transport }
 }
+
+test('HTTP source context comes from each call, rejects conflicts and never sticks to the MCP session', async t => {
+  temporary(t)
+  const sent = []
+  const adapter = { workspaces: async () => [{ workspaceId: 'w', path: '/one' }], sessions: async () => [{ workspaceId: 'w', sessionId: 's' }], send: async (_target, text) => { sent.push(text); return { state: 'queued' } } }
+  const fixture = await httpFixture(t, { adapter: () => adapter })
+  const session = await fixture.init()
+  let id = 1
+  const send = async (meta, extra = {}) => (await fixture.post({ jsonrpc: '2.0', id: ++id, method: 'tools/call', params: {
+    name: 'peer_send', arguments: { workspace: 'w', session: 's', text: 'test', ...extra }, ...(meta === undefined ? {} : { _meta: meta }),
+  } }, session)).json()
+  assert.equal((await send({ threadId: 'thread-one' })).result.isError, false)
+  assert.equal((await send({ threadId: 'thread-two' })).result.isError, false)
+  assert.match(sent[0], /会话 thread-one/); assert.match(sent[1], /会话 thread-two/)
+  const mismatch = await send({ threadId: 'thread-one' }, { sourceSession: 'thread-two' })
+  assert.equal(JSON.parse(mismatch.result.content[0].text).error.code, 'SOURCE_SESSION_MISMATCH')
+  for (const meta of [{ threadId: '' }, { threadId: 123 }, { threadId: 'bad\nsource' }, []]) {
+    const result = await send(meta)
+    assert.equal(JSON.parse(result.result.content[0].text).error.code, 'INVALID_SOURCE_CONTEXT')
+  }
+  assert.equal(sent.length, 2)
+  assert.equal((await send(undefined)).result.isError, false)
+  assert.equal(sent[2], '【来自 ChatGPT/Codex】\ntest')
+  assert.equal((await send(undefined, { sourceSession: 'legacy-label' })).result.isError, false)
+  assert.match(sent[3], /会话 legacy-label/)
+})
 
 test('HTTP MCP authenticates, fences browser origins, limits bodies and returns actionable target errors', async t => {
   temporary(t)
@@ -231,6 +258,9 @@ test('one plugin enable configures MCP and all tools; disable and reinstall rele
   const stop = async () => { for (const effect of effects.splice(0).reverse()) await effect() }
   await mountPlugin(ctx, { codexHome: home }, value => value, options)
   assert.equal(tools.size, 12); assert.equal(routes.size, 1)
+  await assert.rejects(tools.get('peer_send').execute({ workspace: 'unused', session: 'unused', text: 'test', sourceSession: 'other-session' }, {
+    agent: { session: { id: 'host-session' } }, signal: new AbortController().signal,
+  }), { code: 'SOURCE_SESSION_MISMATCH' })
   assert.match(state.servers.peerbridge.url, /\/peerbridge\/peerbridge\/mcp$/)
   await stop()
   assert.equal(tools.size, 0); assert.equal(routes.size, 0); assert.equal(state.servers.peerbridge, undefined)
@@ -252,4 +282,24 @@ test('real Codex config writer preserves TOML comments and other MCP entries in 
   const result = readFileSync(file, 'utf8')
   assert.match(result, /# user comment/); assert.match(result, /mcp_servers.other/)
   assert.doesNotMatch(result, /mcp_servers.peerbridge/)
+})
+
+test('real Codex automatically supplies distinct per-thread HTTP MCP context without source arguments or model prompts', { skip: !process.env.PEERBRIDGE_TEST_CODEX_BIN }, async t => {
+  const directory = temporary(t)
+  const sent = []
+  const adapter = { workspaces: async () => [{ workspaceId: 'w', path: '/one' }], sessions: async () => [{ workspaceId: 'w', sessionId: 's' }], send: async (_target, text) => { sent.push(text); return { state: 'queued' } } }
+  const fixture = await httpFixture(t, { adapter: () => adapter })
+  const home = join(directory, 'native-codex'); mkdirSync(home)
+  writeFileSync(join(home, 'config.toml'), `[mcp_servers.context_probe]\nurl = "${fixture.origin}/mcp"\nhttp_headers = { Authorization = "Bearer ${fixture.token}" }\n`, { mode: 0o600 })
+  await withCodex({ codexBin: process.env.PEERBRIDGE_TEST_CODEX_BIN, codexHome: home, timeoutMs: 60000 }, async client => {
+    const first = (await client.call('thread/start', { cwd: directory, ephemeral: true })).thread.id
+    const second = (await client.call('thread/start', { cwd: directory, ephemeral: true })).thread.id
+    for (const id of [first, second]) {
+      await client.call('mcpServerStatus/list', { threadId: id, serverName: 'context_probe' })
+      await client.call('mcpServer/tool/call', { threadId: id, server: 'context_probe', tool: 'peer_send', arguments: { workspace: 'w', session: 's', text: 'isolated native test' } })
+    }
+    assert.equal(sent.length, 2)
+    assert.ok(sent[0].includes(`会话 ${first}`)); assert.ok(sent[1].includes(`会话 ${second}`))
+    assert.ok(!sent[0].includes(second)); assert.ok(!sent[1].includes(first))
+  })
 })

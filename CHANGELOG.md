@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 (plugin-only branch)
+
+- Read native Codex `_meta.threadId` on every MCP tool call to identify the issuing chat automatically, including shared HTTP connections.
+- Bind DSH calls to their executing Agent session and reject conflicting manual source IDs before sending. Preserve explicit attribution fallback for clients without host context.
+- Cover per-call isolation, invalid metadata, conflict rejection, and two real isolated Codex threads without model prompts.
+
 ## 0.5.0 (plugin-only branch)
 
 - Distribute a standard DSH bundle with its own manifest and patch, visible and controllable in the official Plugins page.

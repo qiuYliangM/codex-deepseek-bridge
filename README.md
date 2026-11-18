@@ -2,7 +2,7 @@
 
 在 **DSH 侧安装一次标准插件**，为 Codex 与 DeepSeek Harness 提供双向消息、工程与会话管理。插件直接运行在 DSH 宿主中，自动注册 Codex 的本机 HTTP MCP 连接；不需要安装第二个应用、全局 Node.js、常驻 Hub 或手工复制网关 token。
 
-本分支开发版本为 **0.5.0**。主线已发布的 0.4.5 原生安装包保留原有行为。新插件使用 MIT 许可证，不包含两个客户端、账户信息或密钥。
+本分支开发版本为 **0.5.1**。主线已发布的 0.4.5 原生安装包保留原有行为。新插件使用 MIT 许可证，不包含两个客户端、账户信息或密钥。
 
 需要已安装的两个客户端和可用的 Codex CLI。首次启用后需重载 Codex；DSH 未启用热重载时也需要重启。插件安装不发送模型消息。当前真实客户端实测为 Linux ARM64；其他平台通过隔离协议和生命周期测试，不代表已验证所有桌面版本。
 
@@ -62,14 +62,16 @@ Codex 本机桌面同步：检测到本机桌面版后，新目录通过 `codex:
 
 `desktopSync` 分别报告 `registered`（桌面状态中已登记）、`missing`、`identity-mismatch` 或 `unavailable`，并通过 `displayTitle`、`titleMatches` 区分后台名称与桌面名称。`liveUiVerified: false` 表示运行时仅核对持久化登记，没有读取屏幕。桌面入口使用目录名；请求不同的自定义标题会返回 `titleApplied: false`、`completed: false`，不能报告完整成功。已有的仅后台登记工程不会自动合并或重复新建，会保留原 ID 并返回 `completed: false`；未检测到桌面入口时也明确返回后台部分成功。修改后台工程名暂不保证同步桌面名称。读取桌面状态不修改客户端文件、不自动重启客户端。DeepSeek 官方桌面版的创建结果已验证进入其工作区注册表。
 
-`sourceSession` 是发送和提问的可选来源标签，不决定目标。Codex 默认从 `CODEX_THREAD_ID` / `CODEX_SESSION_ID` 获取来源，DSH 默认使用执行工具的 Agent 会话 ID。来源缺失不影响显式目标发送。
+Codex 的原生 MCP 调用通过每次请求的 `_meta.threadId` 自动提供来源会话；DSH 使用执行工具的 Agent 会话 ID。宿主提供来源时，手工 `sourceSession` 与其冲突会报 `SOURCE_SESSION_MISMATCH`，不会发送。旧 stdio 入口保留环境变量回退；缺少宿主上下文的兼容调用仍可显式提供来源标签。MCP 的连接会话 ID 不用于识别 Codex 聊天，来源缺失时也不猜测默认聊天。来源字段不决定发送目标。
+
+这只补齐自动来源识别；结构化收件箱和 `peer_reply` 尚未实现，当前消息来源仍显示在正文标签中。原生元数据是宿主提供的调用上下文，不构成跨用户身份认证。
 
 ## 安装
 
-下载或构建 `peerbridge-dsh-plugin-0.5.0.tgz`，然后仅在实际使用的 DSH profile 中安装：
+下载或构建 `peerbridge-dsh-plugin-0.5.1.tgz`，然后仅在实际使用的 DSH profile 中安装：
 
 ```sh
-dsh plugin --profile desktop add /absolute/path/peerbridge-dsh-plugin-0.5.0.tgz
+dsh plugin --profile desktop add /absolute/path/peerbridge-dsh-plugin-0.5.1.tgz
 ```
 
 DSH Web 使用 `--profile web`。也可在 DSH 插件页添加该 tarball 的绝对路径。不要直接安装仓库根目录的 GitHub 源码压缩包：可安装的标准插件位于 `bridges/dsh/peerbridge-dsh-plugin`，根项目仍保留兼容 CLI 开发代码。

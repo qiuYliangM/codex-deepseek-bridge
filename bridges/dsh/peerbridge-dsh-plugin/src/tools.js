@@ -21,7 +21,7 @@ export const toolDefinitions = [
 ].map(([name, description, parameters]) => ({
   name, description,
   parameters: { ...parameters, ...(['peer_send', 'peer_ask'].includes(name) ? {
-    sourceSession: { type: 'string', description: 'Optional source conversation ID for attribution only. Does not choose the target.' },
+    sourceSession: { type: 'string', description: 'Legacy source attribution when host context is unavailable. Codex/DSH supply the current session automatically; a conflicting value fails. Does not choose the target.' },
   } : {}) },
 }))
 
@@ -32,7 +32,7 @@ function timeline(side, kind, data, sessionId) {
   } catch { /* Observation does not change delivery results. */ }
 }
 
-export async function runTool(peer, name, args = {}, { sourceSession, signal, adapter } = {}) {
+export async function runTool(peer, name, args = {}, { sourceSession, sourceSessionLocked = false, signal, adapter } = {}) {
   signal?.throwIfAborted()
   const definition = toolDefinitions.find(tool => tool.name === name)
   if (!definition) throw new Error(`unknown tool: ${name}`)
@@ -45,7 +45,10 @@ export async function runTool(peer, name, args = {}, { sourceSession, signal, ad
   for (const [key, parameter] of Object.entries(definition.parameters)) {
     if (parameter.required && args[key] === undefined) throw new Error(`缺少参数 ${key}`)
   }
-  sourceSession = args.sourceSession || sourceSession
+  if (sourceSessionLocked && args.sourceSession && args.sourceSession !== sourceSession) {
+    throw Object.assign(new Error('sourceSession 与宿主当前会话不一致，未发送；请省略该参数以使用自动来源'), { code: 'SOURCE_SESSION_MISMATCH' })
+  }
+  sourceSession = sourceSessionLocked ? sourceSession : args.sourceSession || sourceSession
   const operations = new PeerOperations(peer, { sourceSession, signal, adapter })
   const side = peer === 'dsh' ? 'codex' : 'dsh'
   if (operationTools.some(tool => tool[0] === name)) {

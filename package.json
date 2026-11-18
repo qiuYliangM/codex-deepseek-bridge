@@ -1,6 +1,6 @@
 {
   "name": "peerbridge",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Local Codex × DeepSeek Harness collaboration bridge with explicit project and session routing",
   "type": "module",
   "private": true,

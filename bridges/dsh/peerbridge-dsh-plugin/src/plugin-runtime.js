@@ -75,8 +75,9 @@ export async function mountPlugin(ctx, config, defineTool, { register = configur
           output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
           async execute(args, exec) {
             const signal = exec.signal ? AbortSignal.any([exec.signal, lifetime.signal]) : lifetime.signal
+            const sourceSession = exec.agent?.session?.id ?? exec.sessionId
             const value = await runTool('codex', tool.name, args, {
-              sourceSession: exec.agent?.session?.id ?? exec.sessionId, signal,
+              sourceSession, sourceSessionLocked: !!sourceSession, signal,
               adapter: new CodexAdapter({ codexBin, codexHome: explicitHome, signal }),
             })
             return JSON.parse(JSON.stringify(value))
