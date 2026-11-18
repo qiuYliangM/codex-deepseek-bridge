@@ -97,3 +97,5 @@ Other targets: `linux-x64`, `win-x64`, `darwin-x64`, `darwin-arm64`. Output goes
 `dist/`. On GitHub, run the **Native installers** workflow manually to build all
 five targets with standard hosted runners. Download its installer artifacts;
 each contains the installer, checksum, and native validation report.
+Pushing a version tag also builds and validates all targets before publishing
+them together in a GitHub Release; a failed target prevents publication.

@@ -98,7 +98,7 @@ npm install --global ./dist/peerbridge-0.4.5.tgz
 peerbridge install
 ```
 
-`dist/SHA256SUMS` 包含校验值。仓库的 CI 使用标准 GitHub-hosted Ubuntu runner 运行测试和打包；推送与 `package.json` 版本一致的 `v*` 标签后，Release 工作流会发布 tarball 和校验文件。不会自动发布到 npm，也不配置付费大型 runner。费用以 [GitHub Actions 官方说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions) 为准。
+`dist/SHA256SUMS` 包含校验值。仓库 CI 运行测试和打包；推送与 `package.json` 版本一致的 `v*` 标签后，Release 工作流会在各平台的标准 runner 上生成、安装验证全部原生安装包，再一起发布安装包、tarball 和校验文件。不会自动发布到 npm，也不配置付费大型 runner。费用以 [GitHub Actions 官方说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions) 为准。
 
 ## 命令行
 
