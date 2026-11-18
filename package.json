@@ -1,6 +1,6 @@
 {
   "name": "peerbridge",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Local Codex × DeepSeek Harness collaboration bridge with explicit project and session routing",
   "type": "module",
   "private": true,
@@ -15,7 +15,8 @@
   "scripts": {
     "test": "node --test verify/operations.test.mjs",
     "package": "node scripts/package.mjs",
-    "test:package": "node scripts/check-package.mjs"
+    "test:package": "node scripts/check-package.mjs",
+    "package:installer": "node scripts/build-installer.mjs"
   },
   "repository": {
     "type": "git",
@@ -31,6 +32,7 @@
     "src/standalone.js",
     "src/codex/mcp.js",
     "bridges/dsh/peerbridge-dsh-plugin/",
+    "docs/installers.md",
     "README.md",
     "LICENSE",
     "SECURITY.md",

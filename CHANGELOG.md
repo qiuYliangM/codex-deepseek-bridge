@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5
+
+- Add Linux amd64/arm64 Debian packages, a Windows x64 NSIS installer, and macOS Intel/Apple Silicon packages with a bundled, checksum-verified Node.js runtime.
+- Build, install, upgrade, and validate all five packages on their native OS and architecture through GitHub Actions.
+- Resolve Windows npm CLI shims directly to JavaScript entries without passing message text through a command shell.
+- Preserve the `peerbridge` command, MCP registration, plugin identifier, and user data paths across installer updates.
+
 ## 0.4.4
 
 - Prepare the public source repository and an installable npm tarball with an explicit file allowlist, MIT license, and CI/release workflows.

@@ -1,0 +1,96 @@
+name: Native installers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: win-x64
+            runner: windows-2025
+          - target: darwin-x64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.23.5'
+      - name: Install NSIS when needed
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+            choco install nsis --version=3.11 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run package
+      - run: npm run test:package
+      - name: Build installer
+        env:
+          INSTALLER_TARGET: ${{ matrix.target }}
+        run: node scripts/build-installer.mjs "$env:INSTALLER_TARGET"
+        if: runner.os == 'Windows'
+      - name: Build installer
+        if: runner.os != 'Windows'
+        env:
+          INSTALLER_TARGET: ${{ matrix.target }}
+        run: node scripts/build-installer.mjs "$INSTALLER_TARGET"
+      - name: Install and upgrade Debian package
+        if: runner.os == 'Linux'
+        run: |
+          sudo dpkg -i dist/*.deb
+          sudo dpkg -i dist/*.deb
+      - name: Install and upgrade macOS package
+        if: runner.os == 'macOS'
+        run: |
+          sudo installer -pkg dist/*.pkg -target /
+          sudo installer -pkg dist/*.pkg -target /
+      - name: Install and upgrade Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $file = (Get-ChildItem dist/*.exe).FullName
+          1..2 | ForEach-Object {
+            $p = Start-Process -FilePath $file -ArgumentList '/S' -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+          }
+      - name: Validate installed package
+        env:
+          INSTALLER_TARGET: ${{ matrix.target }}
+        if: runner.os != 'Windows'
+        run: node scripts/check-installer.mjs "$INSTALLER_TARGET"
+      - name: Validate installed package
+        env:
+          INSTALLER_TARGET: ${{ matrix.target }}
+        if: runner.os == 'Windows'
+        run: node scripts/check-installer.mjs "$env:INSTALLER_TARGET"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-${{ matrix.target }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/*.deb
+            dist/*.exe
+            dist/*.pkg
+            dist/*.sha256
+            dist/native-*.json

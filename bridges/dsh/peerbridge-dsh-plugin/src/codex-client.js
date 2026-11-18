@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { readConfig } from './state.js'
+import { cliCommand, cliEnvironment } from './cli-command.js'
 
 export class CodexClient {
   constructor({ timeoutMs = 20000, signal } = {}) {
@@ -16,7 +17,8 @@ export class CodexClient {
     const args = config.codexSocket
       ? ['app-server', 'proxy', '--sock', config.codexSocket]
       : ['app-server', '--listen', 'stdio://']
-    this.child = spawn(config.codexBin || 'codex', args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    const cli = cliCommand(config.codexBin || 'codex', args)
+    this.child = spawn(cli.command, cli.args, { env: cliEnvironment(), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     this.child.stderr.on('data', () => {})
     this.child.stdin.on('error', error => this.fail(error))
     this.child.on('error', error => this.fail(error))
@@ -39,7 +41,7 @@ export class CodexClient {
     this.signal?.addEventListener('abort', this.abort, { once: true })
     if (this.signal?.aborted) this.abort()
     await this.call('initialize', {
-      clientInfo: { name: 'peerbridge', title: 'PeerBridge', version: '0.4.4' },
+      clientInfo: { name: 'peerbridge', title: 'Codex DeepSeek Bridge', version: '0.4.5' },
       capabilities: { experimentalApi: true, requestAttestation: false },
     })
     this.child.stdin.write(`${JSON.stringify({ method: 'initialized' })}\n`)
@@ -87,8 +89,9 @@ export async function withCodex(options, run) {
 export function queueToCodex(threadId, text, signal) {
   signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
-    execFile(readConfig().codexBin || 'codex', ['queue', '--thread', threadId, '--message', text],
-      { encoding: 'utf8', timeout: 20000, maxBuffer: 1024 * 1024, signal }, (error, stdout, stderr) => {
+    const cli = cliCommand(readConfig().codexBin || 'codex', ['queue', '--thread', threadId, '--message', text])
+    execFile(cli.command, cli.args,
+      { env: cliEnvironment(), windowsHide: true, encoding: 'utf8', timeout: 20000, maxBuffer: 1024 * 1024, signal }, (error, stdout, stderr) => {
         if (error) { reject(new Error(`codex queue 失败: ${(stderr || error.message).slice(0, 500)}`)); return }
         const messageId = /Queued message ([0-9a-f-]+) for (?:session|thread)/i.exec(stdout)?.[1]
         resolve({ state: 'queued', messageId, receipt: messageId ? undefined : stdout.trim().slice(0, 500) })

@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { readConfig } from './state.js'
+import { cliCommand } from './cli-command.js'
 
 export function desktopExecutable() {
   const config = readConfig()
@@ -23,7 +24,8 @@ export async function openDesktopProject(executable, path, { signal } = {}) {
   // DSH runs Node through Electron; do not pass its Node flag to the GUI.
   delete env.ELECTRON_RUN_AS_NODE
   await new Promise((resolve, reject) => {
-    const child = spawn(executable, [url.href], { env, detached: true, stdio: 'ignore' })
+    const cli = cliCommand(executable, [url.href])
+    const child = spawn(cli.command, cli.args, { env, detached: true, stdio: 'ignore' })
     child.once('error', error => reject(new Error(`Codex 桌面工程入口失败: ${error.message}`)))
     child.once('spawn', () => { child.unref(); resolve() })
   })

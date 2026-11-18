@@ -17,6 +17,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dataDir, readConfig as loadConfig } from '../bridges/dsh/peerbridge-dsh-plugin/src/state.js'
 import { parseGatewayUrl } from '../bridges/dsh/peerbridge-dsh-plugin/src/dsh-client.js'
+import { cliCommand, cliEnvironment } from '../bridges/dsh/peerbridge-dsh-plugin/src/cli-command.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_DIR = dataDir()
@@ -51,9 +52,8 @@ function guessDshBin()         {
 }
 
 function runDsh(dshBin        , args          )       {
-  const command = dshBin.endsWith('.js') || dshBin.endsWith('.mjs') ? process.execPath : dshBin
-  const argv = command === process.execPath ? [dshBin, ...args] : args
-  execFileSync(command, argv, { encoding: 'utf8', timeout: 300_000, stdio: ['ignore', 'pipe', 'pipe'] })
+  const cli = cliCommand(dshBin, args)
+  execFileSync(cli.command, cli.args, { env: cliEnvironment(), encoding: 'utf8', timeout: 300_000, stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
 function pluginSnapshot()         {

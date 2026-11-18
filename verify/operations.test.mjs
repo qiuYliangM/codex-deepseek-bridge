@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chmodSync, cpSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, statSync } from 'node:fs'
+import { chmodSync, cpSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, realpathSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn, execFile } from 'node:child_process'
@@ -14,12 +14,13 @@ import { runTool, toolDefinitions } from '../bridges/dsh/peerbridge-dsh-plugin/s
 import { DshAdapter, CodexAdapter } from '../bridges/dsh/peerbridge-dsh-plugin/src/adapters.js'
 import { queueToCodex } from '../bridges/dsh/peerbridge-dsh-plugin/src/codex-client.js'
 import { desktopProjectStatus, readDesktopProjects, waitForDesktopProject, workspaceCreationReceipt } from '../bridges/dsh/peerbridge-dsh-plugin/src/codex-desktop.js'
+import { cliCommand } from '../bridges/dsh/peerbridge-dsh-plugin/src/cli-command.js'
 
 const root = resolve(import.meta.dirname, '..')
 const executeFile = promisify(execFile)
 
 test('desktop registration requires both matching roots and the canonical project ID', t => {
-  const home = mkdtempSync(join(tmpdir(), 'peerbridge-desktop-'))
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'peerbridge-desktop-')))
   t.after(() => rmSync(home, { recursive: true, force: true }))
   const project = { id: 'server-1', name: 'Project', roots: [{ path: '/project' }] }
   const file = join(home, '.codex-global-state.json')
@@ -51,7 +52,7 @@ test('desktop registration requires both matching roots and the canonical projec
 })
 
 function sandbox(t) {
-  const directory = mkdtempSync(join(tmpdir(), 'peerbridge-ops-'))
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'peerbridge-ops-')))
   const previous = process.env.PEERBRIDGE_HOME
   process.env.PEERBRIDGE_HOME = directory
   t.after(() => {
@@ -61,6 +62,21 @@ function sandbox(t) {
   })
   return directory
 }
+
+test('Windows npm shims resolve directly to Node and preserve message metacharacters', async t => {
+  const directory = sandbox(t)
+  const bin = join(directory, 'bin with spaces')
+  mkdirSync(bin)
+  const entry = join(bin, 'entry.mjs')
+  writeFileSync(entry, 'console.log(JSON.stringify(process.argv.slice(2)))\n')
+  writeFileSync(join(bin, 'codex.cmd'), '@echo off\r\n"%_prog%" "%dp0%\\entry.mjs" %*\r\n')
+  const args = ['queue', '--message', 'quotes " and & | < > %PATH% ! $ `\nnext line']
+  const cli = cliCommand('codex', args, { platform: 'win32', env: { Path: bin } })
+  const { stdout } = await executeFile(cli.command, cli.args)
+  assert.deepEqual(JSON.parse(stdout), args)
+  writeFileSync(join(bin, 'custom.cmd'), '@echo off\r\necho custom script\r\n')
+  assert.throws(() => cliCommand(join(bin, 'custom.cmd'), args, { platform: 'win32' }), /真实 .exe/)
+})
 
 class MemoryAdapter {
   constructor() {
@@ -196,9 +212,7 @@ test('Codex queue receipts support both session and thread output formats', asyn
   const executable = join(directory, 'codex-receipt.mjs')
   const messageId = '12345678-1234-1234-1234-123456789abc'
   const threadId = 'abcdefab-1234-1234-1234-abcdefabcdef'
-  const wrapper = join(directory, 'codex-wrapper')
-  writeFileSync(wrapper, `#!/bin/sh\nexec '${process.execPath}' '${executable}' "$@"\n`, { mode: 0o755 })
-  writeFileSync(join(directory, 'config.json'), JSON.stringify({ codexBin: wrapper }))
+  writeFileSync(join(directory, 'config.json'), JSON.stringify({ codexBin: executable }))
   for (const label of ['session', 'thread']) {
     writeFileSync(executable, `console.log('Queued message ${messageId} for ${label} ${threadId}.')\n`)
     const receipt = await queueToCodex(threadId, 'test')
@@ -219,7 +233,7 @@ test('installer honors DSH_HOME, includes existing tauri profile, and removes ne
   const fakeDsh = join(directory, 'dsh.mjs')
   writeFileSync(fakeDsh, `import{mkdirSync,writeFileSync}from'node:fs';import{join}from'node:path';const a=process.argv.slice(2);const p=join(process.env.DSH_HOME,'profiles',a[a.indexOf('--profile')+1]);mkdirSync(p,{recursive:true});writeFileSync(join(p,'package.json'),JSON.stringify({dependencies:a.includes('add')?{'peerbridge-dsh-plugin':a.at(-1)}:{}}));`)
   writeFileSync(join(directory, 'config.json'), JSON.stringify({ dshBin: fakeDsh, codexBin: 'unused', codexThread: 'keep-binding' }))
-  const env = { ...process.env, HOME: home, DSH_HOME: dshHome, CODEX_HOME: codexHome, PEERBRIDGE_HOME: directory }
+  const env = { ...process.env, HOME: home, USERPROFILE: home, DSH_HOME: dshHome, CODEX_HOME: codexHome, PEERBRIDGE_HOME: directory }
   await executeFile(process.execPath, ['bin/peerbridge.mjs', 'install'], { cwd: root, env })
   for (const profile of ['sdk', 'web', 'tauri', 'desktop']) assert.match(readFileSync(join(dshHome, 'profiles', profile, 'cordis.patch.yml'), 'utf8'), /peerbridge-dsh-plugin/)
   const dependency = JSON.parse(readFileSync(join(dshHome, 'profiles/web/package.json'))).dependencies['peerbridge-dsh-plugin']
@@ -231,15 +245,15 @@ test('installer honors DSH_HOME, includes existing tauri profile, and removes ne
   const path = join(codexHome, 'config.toml')
   writeFileSync(path, `${readFileSync(path, 'utf8').replace(/^args = .*$/m, 'args = [\n  "old entry", # closing ] in a comment\n]')}\nenabled = false\n[mcp_servers.peerbridge.env]\nKEEP = "remove"\n\n[mcp_servers.other]\ncommand = "keep"\n`)
   const relocated = join(directory, 'checkout with spaces')
-  cpSync(root, relocated, { recursive: true, filter: path => !/(^|\/)(node_modules|\.git|dist)(\/|$)/.test(path) })
+  cpSync(root, relocated, { recursive: true, filter: path => !/(^|[\\/])(node_modules|\.git|dist|\.build|\.cache)([\\/]|$)/.test(path) })
   await executeFile(process.execPath, [join(relocated, 'bin/peerbridge.mjs'), 'install'], { cwd: relocated, env })
   const updated = readFileSync(path, 'utf8')
-  assert.ok(updated.includes(join(relocated, 'bin/codex-mcp.mjs')))
+  assert.ok(updated.includes(JSON.stringify(join(relocated, 'bin/codex-mcp.mjs'))))
   assert.doesNotMatch(updated, /%20|old entry/)
   assert.match(updated, /enabled = false/)
   assert.match(updated, /KEEP = "remove"/)
   assert.match(updated, /command = "keep"/)
-  assert.equal(statSync(join(directory, 'config.json')).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') assert.equal(statSync(join(directory, 'config.json')).mode & 0o777, 0o600)
   await executeFile(process.execPath, ['bin/peerbridge.mjs', 'uninstall'], { cwd: root, env })
   const result = readFileSync(path, 'utf8')
   assert.doesNotMatch(result, /mcp_servers\.peerbridge/)
@@ -255,7 +269,7 @@ test('gateway credentials are private and invalid URLs do not replace the saved 
   writeFileSync(file, 'old', { mode: 0o644 })
   chmodSync(file, 0o644)
   await executeFile(process.execPath, ['bin/peerbridge.mjs', 'weburl', valid], { cwd: root, env })
-  assert.equal(statSync(file).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600)
   const before = readFileSync(file, 'utf8')
   for (const url of ['https://example.com/?token=test', 'http://localhost:3080/', 'file:///tmp/test', 'http://sample:password@localhost/?token=test']) {
     await assert.rejects(executeFile(process.execPath, ['bin/peerbridge.mjs', 'weburl', url], { cwd: root, env }))
@@ -416,7 +430,7 @@ test('MCP stdio enforces explicit targets and exposes actionable target errors',
 
 test('Codex RPC adapter paginates and persists project/session management without starting turns', async t => {
   const directory = sandbox(t)
-  const executable = join(directory, 'codex-mock')
+  const executable = join(directory, 'codex-mock.mjs')
   const store = join(directory, 'mock-state.json')
   writeFileSync(store, JSON.stringify({ projects: [], threads: [], calls: [] }))
   writeFileSync(executable, `#!${process.execPath}
@@ -470,7 +484,7 @@ createInterface({input:process.stdin}).on('line',line=>{
   const previousHome = process.env.CODEX_HOME
   process.env.CODEX_HOME = directory
   t.after(() => { if (previousHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousHome })
-  const desktop = join(directory, 'desktop-mock')
+  const desktop = join(directory, 'desktop-mock.mjs')
   writeFileSync(desktop, `#!${process.execPath}
 import {readFileSync,writeFileSync} from 'node:fs';import{basename,join}from'node:path';
 const statePath=${JSON.stringify(store)}, home=${JSON.stringify(directory)};

@@ -19,6 +19,7 @@ const temporary = mkdtempSync(join(tmpdir(), 'peerbridge-package-'))
 try {
   const prefix = join(temporary, 'install with spaces')
   const env = { ...process.env, HOME: join(temporary, 'home'), CODEX_HOME: join(temporary, 'codex'), DSH_HOME: join(temporary, 'dsh'), PEERBRIDGE_HOME: join(temporary, 'bridge'), npm_config_cache: join(temporary, 'npm-cache') }
+  env.USERPROFILE = env.HOME
   mkdirSync(env.HOME)
   execFileSync(process.execPath, [process.env.npm_execpath, 'install', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', '--offline', tarball], {
     env, encoding: 'utf8', timeout: 30000,

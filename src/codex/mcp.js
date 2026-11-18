@@ -16,7 +16,7 @@ async function dispatch(method        , params                         , signal 
   switch (method) {
     case 'initialize': return {
       protocolVersion: typeof params.protocolVersion === 'string' ? params.protocolVersion : '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'peerbridge-codex-bridge', version: '0.4.4' },
+      serverInfo: { name: 'peerbridge-codex-bridge', version: '0.4.5' },
     }
     case 'ping': return {}
     case 'tools/list': return { tools: toolDefinitions.map(tool => ({

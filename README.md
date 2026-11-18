@@ -66,6 +66,8 @@ Codex 本机桌面同步：检测到本机桌面版后，新目录通过 `codex:
 
 ## 安装
 
+Linux x64/ARM64 `.deb`、Windows x64 `.exe`、macOS Intel/Apple Silicon `.pkg` 安装包内置 Node.js；安装、连接客户端与升级方式见 [安装包说明](docs/installers.md)。项目提供命令行与 MCP 工具。
+
 需要 Node.js >= 22.19、已安装且支持 `codex queue` 和实验性项目 RPC 的 Codex CLI，以及可用的 DSH CLI/Web 网关。同一系统用户运行两个客户端；这不是跨主机服务。没有对应实验性接口的 Codex 版本会报错。
 
 从源码安装：
@@ -92,7 +94,7 @@ node bin/peerbridge.mjs uninstall
 ```bash
 npm run package
 npm run test:package
-npm install --global ./dist/peerbridge-0.4.4.tgz
+npm install --global ./dist/peerbridge-0.4.5.tgz
 peerbridge install
 ```
 
